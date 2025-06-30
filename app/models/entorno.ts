@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
-export default class User extends BaseModel {
+export default class Entorno extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
 
@@ -9,10 +9,10 @@ export default class User extends BaseModel {
   declare nombre: string
 
   @column()
-  declare email: string
+  declare color: string
 
   @column()
-  declare password: string
+  declare userId: number
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

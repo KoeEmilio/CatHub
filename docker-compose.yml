@@ -11,7 +11,5 @@ services:
       MONGO_INITDB_DATABASE: db_cathub  
     volumes:
       - mongo-data:/data/db
-      - ./mongo-init:/docker-entrypoint-initdb.d:ro  # Scripts de inicialización
-
 volumes:
   mongo-data:
