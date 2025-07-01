@@ -5,7 +5,7 @@ services:
     container_name: mongo
     restart: always
     ports:
-      - "443:27017"
+      - "19132:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: admin123
@@ -18,7 +18,7 @@ services:
     container_name: postgres
     restart: always
     ports:
-      - "80:5432"
+      - "2005:5432"
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
