@@ -1,0 +1,60 @@
+<div class="form-container">
+  <h2>Crear usuario</h2>
+  <form #userForm="ngForm" (ngSubmit)="onSubmit(userForm)">
+    <div class="form-group">
+      <label for="fullName">Nombre de usuario</label>
+      <input
+        type="text"
+        id="fullName"
+        name="fullName"
+        [(ngModel)]="user.fullName"
+        required
+        minlength="3"
+        [ngModelOptions]="{ updateOn: 'blur' }"
+        #fullName="ngModel"
+        appOnlyLetters
+      >
+      <div *ngIf="fullName.invalid && (fullName.dirty || fullName.touched)" class="error">
+        <div *ngIf="fullName.errors?.['required']">El nombre de usuario es requerido</div>
+        <div *ngIf="fullName.errors?.['minlength']">El nombre de usuario debe contener mínimo 3 caracteres</div>
+        <div *ngIf="fullName.errors?.['onlyLetters']">El nombre de usuario no puede contener números ni caracteres especiales</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="email">Email</label>
+      <input
+        type="email"
+        id="email"
+        name="email"
+        [(ngModel)]="user.email"
+        required
+        email
+        [ngModelOptions]="{ updateOn: 'blur' }"
+        #email="ngModel"
+        [appUniqueEmail]="apiService"
+      >
+      <div *ngIf="email.invalid && (email.dirty || email.touched)" class="error">
+        <div *ngIf="email.errors?.['required']">El correo es requerido</div>
+        <div *ngIf="email.errors?.['email']">El formato del correo es inválido</div>
+        <div *ngIf="email.errors?.['uniqueEmail']">El correo ya está registrado</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label for="password">Contraseña</label>
+      <input
+        type="password"
+        id="password"
+        name="password"
+        [(ngModel)]="user.password"
+        required
+        minlength="6"
+        #password="ngModel"
+      >
+      <div *ngIf="password.invalid && (password.dirty || password.touched)" class="error">
+        <div *ngIf="password.errors?.['required']">La contraseña es requerida</div>
+        <div *ngIf="password.errors?.['minlength']">La contraseña debe contener al menos 6 caracteres</div>
+      </div>
+    </div>
+    <button type="submit" [disabled]="userForm.invalid || userForm.pending">Mandar</button>
+  </form>
+</div>

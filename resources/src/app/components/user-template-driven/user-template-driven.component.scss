@@ -1,0 +1,8 @@
+:host{
+    display: block;
+}
+
+button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
