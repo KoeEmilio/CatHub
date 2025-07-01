@@ -1,6 +1,7 @@
+version: '3.8'
 services:
   mongo:
-    image: mongo:7
+    image: mongo:7.0.18      # última 7.x disponible :contentReference[oaicite:0]{index=0}
     container_name: mongo
     restart: always
     ports:
@@ -8,8 +9,23 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: admin123
-      MONGO_INITDB_DATABASE: db_cathub  
+      MONGO_INITDB_DATABASE: db_cathub
     volumes:
       - mongo-data:/data/db
+
+  postgres:
+    image: postgres:17.5   # última 16.x disponible :contentReference[oaicite:1]{index=1}
+    container_name: postgres
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: db_cathub
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
 volumes:
   mongo-data:
+  postgres-data:
