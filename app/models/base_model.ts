@@ -14,8 +14,8 @@ export const baseSchemaOptions = {
       delete ret._id
       delete ret.__v
       return ret
-    }
-  }
+    },
+  },
 }
 
 export abstract class BaseModel {
