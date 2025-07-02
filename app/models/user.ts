@@ -1,22 +1,22 @@
-import { DateTime } from 'luxon'
-import { BaseModel, column } from '@adonisjs/lucid/orm'
+import { Schema, model } from 'mongoose'
+import { BaseModel, baseSchemaOptions, BaseDocument } from './base_model.js'
 
-export default class User extends BaseModel {
-  @column({ isPrimary: true })
-  declare id: number
+export interface UserMongoDocument extends BaseDocument {
+  nombre: string
+  email: string
+  password: string
+}
 
-  @column()
-  declare nombre: string
+const userSchema = new Schema<UserMongoDocument>(
+  {
+    nombre: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+  },
+  baseSchemaOptions
+)
 
-  @column()
-  declare email: string
-
-  @column()
-  declare password: string
-
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime
-
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime
+export class UserMongo extends BaseModel {
+  protected static schema = userSchema
+  protected static model = model<UserMongoDocument>('User', userSchema)
 }
