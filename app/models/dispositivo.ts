@@ -1,33 +1,33 @@
-import { model } from "mongoose";
-
-const mongoose = require('mongoose');
+import { Schema, model } from 'mongoose'
 
 export interface Device {
-  deviceId: string;
-  entornoId: string;
-  type: 'arenero' | 'bebedero' | 'comedero';
+  deviceId: string
+  entornoId: string
+  type: 'arenero' | 'bebedero' | 'comedero'
 }
 
-const deviceSchema = new mongoose.Schema({
-  deviceId: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true
+const deviceSchema = new Schema<Device>(
+  {
+    deviceId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    entornoId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    type: {
+      type: String,
+      required: true,
+      enum: ['arenero', 'bebedero', 'comedero'],
+    },
   },
-  entornoId: {
-    type: String,
-    required: true,
-    index: true 
-  },
-  type: {
-    type: String,
-    required: true,
-    enum: ['arenero', 'bebedero', 'comedero']
-  },
-  
-}, {
-  timestamps: true,
-});
+  {
+    timestamps: true,
+  }
+)
 
-export const Dispositivo = model<Device>('Dispositivo', deviceSchema);
+export const Dispositivo = model<Device>('Dispositivo', deviceSchema)
