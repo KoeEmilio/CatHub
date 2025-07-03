@@ -1,6 +1,5 @@
-import { model } from "mongoose";
+import { model, Schema } from "mongoose";
 
-const mongoose = require('mongoose');
 
 export interface Device {
   deviceId: string;
@@ -8,7 +7,7 @@ export interface Device {
   type: 'arenero' | 'bebedero' | 'comedero';
 }
 
-const deviceSchema = new mongoose.Schema({
+const deviceSchema = new Schema({
   deviceId: {
     type: String,
     required: true,
@@ -21,7 +20,7 @@ const deviceSchema = new mongoose.Schema({
     index: true 
   },
   type: {
-    type: String,
+    type: String, 
     required: true,
     enum: ['arenero', 'bebedero', 'comedero']
   },
