@@ -1,15 +1,18 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 
-export default class ConfArenero extends BaseModel {
+export default class Setting extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
 
   @column()
-  declare tipoLimpieza: 'Completa' | 'Normal'
+  declare configKey: string
 
   @column()
-  declare dispositivoId: string
+  declare configValue: string
+
+  @column()
+  declare dataType: string
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

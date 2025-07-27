@@ -1,13 +1,14 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
-  protected tableName = 'conf_areneros'
+  protected tableName = 'settings'
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
-      table.enum('tipo_limpieza', ['Completa', 'Normal']).notNullable()
-      table.string('dispositivo_id', 100).notNullable()
+      table.string('config_key').notNullable().unique()
+      table.text('config_value').notNullable()
+      table.string('data_type').notNullable()
 
       table.timestamp('created_at')
       table.timestamp('updated_at')
