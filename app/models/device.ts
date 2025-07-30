@@ -1,9 +1,10 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo, hasMany } from '@adonisjs/lucid/orm'
-import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
+import { BaseModel, column, belongsTo, hasMany, manyToMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
 import Environment from './environment.js'
 import DeviceEnvir from './device_envir.js'
 import DeviceSetting from './device_setting.js'
+import Sensor from './sensor.js'
 
 export default class Device extends BaseModel {
   @column({ isPrimary: true })
@@ -32,6 +33,15 @@ export default class Device extends BaseModel {
     foreignKey: 'idDevice',
   })
   declare deviceSettings: HasMany<typeof DeviceSetting>
+
+  @manyToMany(() => Sensor, {
+    pivotTable: 'device_sensors',
+    localKey: 'id',
+    pivotForeignKey: 'id_device',
+    relatedKey: 'id',
+    pivotRelatedForeignKey: 'id_sensor',
+  })
+  declare sensors: ManyToMany<typeof Sensor>
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
