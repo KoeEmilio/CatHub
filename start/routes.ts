@@ -50,6 +50,7 @@ router.group(() => {
 
 // Rutas de dispositivos
 router.group(() => {
+  router.get('/all', [DevicesController, 'getAllDevices']).use(middleware.auth())
   router.get('/environment/:environmentId', [DevicesController, 'index'])
   router.post('/', [DevicesController, 'store'])
   router.get('/:id', [DevicesController, 'show'])

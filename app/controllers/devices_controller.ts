@@ -236,4 +236,39 @@ export default class DevicesController {
       })
     }
   }
+
+  /**
+ * Obtener todos los dispositivos del usuario autenticado
+ */
+public async getAllDevices({ auth, response }: HttpContext) {
+  try {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ message: 'No autenticado' })
+    }
+
+    const devices = await Device.query()
+      .preload('environment', (query) => {
+        query.where('id_user', user.id)
+      })
+      .preload('deviceEnvirs') 
+      .whereHas('environment', (query) => {
+        query.where('id_user', user.id)
+      })
+
+    return response.ok({
+      status: 'success',
+      message: 'Dispositivos obtenidos correctamente',
+      data: devices,
+      total: devices.length
+    })
+  } catch (error) {
+    console.error('Error al obtener todos los dispositivos:', error)
+    return response.status(500).json({
+      status: 'error',
+      message: 'Error al obtener los dispositivos',
+      error: error.message
+    })
+  }
+}
 }
