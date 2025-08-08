@@ -9,26 +9,25 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DB}
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo-keyfile/mongodb-keyfile"]
+    # command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo-keyfile/mongodb-keyfile"]
     volumes:
       - mongo-data:/data/db
-      - ./mongodb-keyfile:/etc/mongo-keyfile/mongodb-keyfile:ro
     networks:
       - igmar-net
 
-  mongo-init-replica:
-    image: mongo:7.0.18
-    depends_on:
-      - mongo
-    entrypoint: >
-      bash -c "
-      sleep 5;
-      mongo --host mongo -u ${MONGO_USER} -p ${MONGO_PASSWORD} --authenticationDatabase admin /scripts/init-rs.js
-      "
-    volumes:
-      - ./scripts:/scripts
-  networks:
-    - igmar-net
+  # mongo-init-replica:
+  #   image: mongo:7.0.18
+  #   depends_on:
+  #     - mongo
+  #   entrypoint: >
+  #     bash -c "
+  #     sleep 5;
+  #     mongo --host mongo -u ${MONGO_USER} -p ${MONGO_PASSWORD} --authenticationDatabase admin /scripts/init-rs.js
+  #     "
+  #   volumes:
+  #     - ./scripts:/scripts
+  # networks:
+  #   - igmar-net
 
   postgres:
     image: postgres:17.5
