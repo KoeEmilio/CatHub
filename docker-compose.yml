@@ -13,7 +13,6 @@ services:
     volumes:
       - mongo-data:/data/db
       - ./mongodb-keyfile:/etc/mongo-keyfile/mongodb-keyfile:ro
-      - ./mongodb-keyfile:/data/mongodb-keyfile:ro
 
   mongo-init-replica:
     image: mongo:7.0.18
