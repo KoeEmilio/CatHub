@@ -27,6 +27,8 @@ services:
       "
     volumes:
       - ./scripts:/scripts
+  networks:
+    - igmar-net
 
   postgres:
     image: postgres:17.5
@@ -70,6 +72,7 @@ services:
 networks:
   igmar-net:
     external: true
+    driver: bridge
 
 
 volumes:
