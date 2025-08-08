@@ -9,8 +9,21 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DB}
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     volumes:
       - mongo-data:/data/db
+
+  mongo-init-replica:
+    image: mongo:7.0.18
+    depends_on:
+      - mongo
+    entrypoint: >
+      bash -c "
+      sleep 5;
+      mongo --host mongo -u ${MONGO_USER} -p ${MONGO_PASSWORD} --authenticationDatabase admin /scripts/init-rs.js
+      "
+    volumes:
+      - ./scripts:/scripts
 
   postgres:
     image: postgres:17.5
