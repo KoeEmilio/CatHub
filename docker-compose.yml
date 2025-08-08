@@ -13,6 +13,8 @@ services:
     volumes:
       - mongo-data:/data/db
       - ./mongodb-keyfile:/etc/mongo-keyfile/mongodb-keyfile:ro
+    networks:
+      - igmar-net
 
   mongo-init-replica:
     image: mongo:7.0.18
@@ -25,8 +27,6 @@ services:
       "
     volumes:
       - ./scripts:/scripts
-    networks:
-      - igmar-net
 
   postgres:
     image: postgres:17.5
