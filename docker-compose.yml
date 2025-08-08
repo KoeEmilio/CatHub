@@ -9,9 +9,10 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DB}
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo-keyfile/mongodb-keyfile"]
     volumes:
       - mongo-data:/data/db
+      - ./mongodb-keyfile:/etc/mongo-keyfile/mongodb-keyfile:ro
 
   mongo-init-replica:
     image: mongo:7.0.18
