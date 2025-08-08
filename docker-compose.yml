@@ -42,13 +42,13 @@ services:
   cathub:
     build: .
     ports:
-      - "1000:3333"
+      - "3333:3333"
     restart: unless-stopped
     environment:
       LOG_LEVEL: info
       APP_KEY: 7Otq2phcA_g__DtX_NQLJZRQN7jxIdFa
       TZ: UTC
-      PORT: 1000
+      PORT: 3333
       HOST: 0.0.0.0
       NODE_ENV: development
       DB_CONNECTION: pg
@@ -56,8 +56,8 @@ services:
       DB_PASSWORD: admin123
       DB_DATABASE: db_cathub
       DB_HOST: postgres
-      DB_PORT: 5001
-      MONGO_URL: mongodb://admin:admin123@mongo:5000/db_cathub?authSource=admin
+      DB_PORT: 5432
+      MONGO_URL: mongodb://admin:admin123@mongo:27017/db_cathub?authSource=admin
     volumes:
       - ./:/app
     networks:
