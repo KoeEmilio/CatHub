@@ -14,3 +14,4 @@ export default class UserSeeder extends BaseSeeder {
     console.log('✅ Usuario administrador creado correctamente')
   }
 }
+  
