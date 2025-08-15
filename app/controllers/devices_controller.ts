@@ -49,7 +49,6 @@ export default class DevicesController {
       // Crear dispositivo
       const device = await Device.create({
         name: data.name,
-        idEnvironment: data.environmentId,
         apiKey: `device_${randomUUID()}` // Generar API key único
       })
 
@@ -102,9 +101,17 @@ export default class DevicesController {
         })
       }
 
-      const devices = await Device.query()
-        .where('id_environment', params.environmentId)
-        .preload('environment')
+      // Obtener dispositivos del entorno a través de device_envirs
+      const deviceEnvirs = await DeviceEnvir.query()
+        .where('idEnvironment', params.environmentId)
+        .preload('device')
+
+      const devices = deviceEnvirs.map(deviceEnvir => ({
+        ...deviceEnvir.device.serialize(),
+        alias: deviceEnvir.alias,
+        type: deviceEnvir.type,
+        deviceEnvirId: deviceEnvir.id
+      }))
 
       return response.ok({
         status: 'success',
@@ -131,15 +138,29 @@ export default class DevicesController {
 
       const device = await Device.query()
         .where('id', params.id)
-        .preload('environment', (query) => {
-          query.where('id_user', user.id)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment', (envQuery) => {
+            envQuery.where('id_user', user.id)
+          })
         })
         .first()
 
-      if (!device || !device.environment) {
+      if (!device) {
         return response.status(404).json({
           status: 'error',
-          message: 'Dispositivo no encontrado o no tienes permisos'
+          message: 'Dispositivo no encontrado'
+        })
+      }
+
+      // Verificar que el usuario tiene acceso a este dispositivo
+      const hasAccess = device.deviceEnvirs.some(deviceEnvir => 
+        deviceEnvir.environment && deviceEnvir.environment.idUser === user.id
+      )
+
+      if (!hasAccess) {
+        return response.status(404).json({
+          status: 'error',
+          message: 'No tienes permisos para ver este dispositivo'
         })
       }
 
@@ -168,15 +189,29 @@ export default class DevicesController {
 
       const device = await Device.query()
         .where('id', params.id)
-        .preload('environment', (query) => {
-          query.where('id_user', user.id)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment', (envQuery) => {
+            envQuery.where('id_user', user.id)
+          })
         })
         .first()
 
-      if (!device || !device.environment) {
+      if (!device) {
         return response.status(404).json({
           status: 'error',
-          message: 'Dispositivo no encontrado o no tienes permisos'
+          message: 'Dispositivo no encontrado'
+        })
+      }
+
+      // Verificar que el usuario tiene acceso a este dispositivo
+      const hasAccess = device.deviceEnvirs.some(deviceEnvir => 
+        deviceEnvir.environment && deviceEnvir.environment.idUser === user.id
+      )
+
+      if (!hasAccess) {
+        return response.status(404).json({
+          status: 'error',
+          message: 'No tienes permisos para actualizar este dispositivo'
         })
       }
 
@@ -210,15 +245,29 @@ export default class DevicesController {
 
       const device = await Device.query()
         .where('id', params.id)
-        .preload('environment', (query) => {
-          query.where('id_user', user.id)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment', (envQuery) => {
+            envQuery.where('id_user', user.id)
+          })
         })
         .first()
 
-      if (!device || !device.environment) {
+      if (!device) {
         return response.status(404).json({
           status: 'error',
-          message: 'Dispositivo no encontrado o no tienes permisos'
+          message: 'Dispositivo no encontrado'
+        })
+      }
+
+      // Verificar que el usuario tiene acceso a este dispositivo
+      const hasAccess = device.deviceEnvirs.some(deviceEnvir => 
+        deviceEnvir.environment && deviceEnvir.environment.idUser === user.id
+      )
+
+      if (!hasAccess) {
+        return response.status(404).json({
+          status: 'error',
+          message: 'No tienes permisos para eliminar este dispositivo'
         })
       }
 
@@ -247,14 +296,23 @@ public async getAllDevices({ auth, response }: HttpContext) {
       return response.unauthorized({ message: 'No autenticado' })
     }
 
-    const devices = await Device.query()
+    // Obtener todos los deviceEnvirs que pertenecen a entornos del usuario
+    const deviceEnvirs = await DeviceEnvir.query()
+      .preload('device')
       .preload('environment', (query) => {
         query.where('id_user', user.id)
       })
-      .preload('deviceEnvirs') 
       .whereHas('environment', (query) => {
         query.where('id_user', user.id)
       })
+
+    const devices = deviceEnvirs.map(deviceEnvir => ({
+      ...deviceEnvir.device.serialize(),
+      alias: deviceEnvir.alias,
+      type: deviceEnvir.type,
+      deviceEnvirId: deviceEnvir.id,
+      environment: deviceEnvir.environment
+    }))
 
     return response.ok({
       status: 'success',

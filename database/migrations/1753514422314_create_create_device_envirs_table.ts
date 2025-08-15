@@ -8,7 +8,7 @@ export default class extends BaseSchema {
       table.increments('id')
       table.string('alias').notNullable()
       table.enum('type', ['arenero', 'bebedero', 'comedero']).notNullable()
-      table.enum('status', ['0', '1']).notNullable().defaultTo('0')
+      table.string('status').notNullable()
       table.integer('id_device').unsigned().references('id').inTable('devices').onDelete('CASCADE')
       table.integer('id_environment').unsigned().references('id').inTable('environments').onDelete('CASCADE')
 

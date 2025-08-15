@@ -29,7 +29,7 @@ router.group(() => {
   router.post('/login', [LoginController, 'login'])
   router.post('/logout', [LoginController, 'logout']).use(middleware.auth())
   router.get('/me', [LoginController, 'me']).use(middleware.auth())
-}).prefix('/api/auth')
+}).prefix('/api')
 
 // Rutas de usuarios
 router.group(() => {

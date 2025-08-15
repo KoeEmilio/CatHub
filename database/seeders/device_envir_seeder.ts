@@ -7,18 +7,21 @@ export default class DeviceEnvirSeeder extends BaseSeeder {
       {
         alias: 'Arenero Principal',
         type: 'arenero',
+        status: 'activo',
         idDevice: 1,
         idEnvironment: 1,
       },
       {
         alias: 'Bebedero Gatos',
         type: 'bebedero',
+        status: 'activo',
         idDevice: 2,
         idEnvironment: 1,
       },
       {
         alias: 'Comedero Cocina',
         type: 'comedero',
+        status: 'activo',
         idDevice: 3,
         idEnvironment: 2,
       },
