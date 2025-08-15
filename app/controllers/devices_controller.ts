@@ -439,6 +439,290 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
 }
 
 /**
+ * Obtener los detalles de una asignación device_envir específica
+ * Útil para cargar datos en formularios de edición
+ */
+public async getDeviceEnvironment({ params, auth, response }: HttpContext) {
+  try {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ message: 'No autenticado' })
+    }
+
+    const { deviceEnvirId } = params
+
+    // Buscar el registro device_envir con sus relaciones
+    const deviceEnvir = await DeviceEnvir.query()
+      .where('id', deviceEnvirId)
+      .preload('device')
+      .preload('environment')
+      .first()
+
+    if (!deviceEnvir) {
+      return response.status(404).json({
+        status: 'error',
+        message: 'Asignación de dispositivo no encontrada'
+      })
+    }
+
+    // Verificar que el environment pertenece al usuario
+    if (deviceEnvir.environment.idUser !== user.id) {
+      return response.status(403).json({
+        status: 'error',
+        message: 'No tienes permisos para ver este dispositivo'
+      })
+    }
+
+    return response.ok({
+      status: 'success',
+      data: {
+        id: deviceEnvir.id,
+        alias: deviceEnvir.alias,
+        type: deviceEnvir.type,
+        status: deviceEnvir.status,
+        intervalo: deviceEnvir.intervalo,
+        comida: deviceEnvir.comida,
+        device: {
+          id: deviceEnvir.device.id,
+          name: deviceEnvir.device.name,
+          code: deviceEnvir.device.code,
+          apiKey: deviceEnvir.device.apiKey
+        },
+        environment: {
+          id: deviceEnvir.environment.id,
+          name: deviceEnvir.environment.name,
+          color: deviceEnvir.environment.color
+        },
+        createdAt: deviceEnvir.createdAt,
+        updatedAt: deviceEnvir.updatedAt
+      }
+    })
+  } catch (error) {
+    console.error('Error al obtener detalles del dispositivo:', error)
+    return response.status(500).json({
+      status: 'error',
+      message: 'Error al procesar la solicitud',
+      error: error.message
+    })
+  }
+}
+
+/**
+ * Actualizar la configuración de un dispositivo en un environment (device_envir)
+ * Permite modificar alias, tipo, status, intervalo y comida
+ */
+public async updateDeviceEnvironment({ params, request, response, auth }: HttpContext) {
+  try {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ message: 'No autenticado' })
+    }
+
+    const { deviceEnvirId } = params
+    const data = request.only(['alias', 'type', 'status', 'intervalo', 'comida', 'environmentId'])
+
+    // Buscar el registro device_envir
+    const deviceEnvir = await DeviceEnvir.query()
+      .where('id', deviceEnvirId)
+      .preload('environment')
+      .preload('device')
+      .first()
+
+    if (!deviceEnvir) {
+      return response.status(404).json({
+        status: 'error',
+        message: 'Asignación de dispositivo no encontrada'
+      })
+    }
+
+    // Verificar que el environment pertenece al usuario
+    if (deviceEnvir.environment.idUser !== user.id) {
+      return response.status(403).json({
+        status: 'error',
+        message: 'No tienes permisos para modificar este dispositivo'
+      })
+    }
+
+    // Validar tipo de dispositivo si se proporciona
+    if (data.type && !['arenero', 'bebedero', 'comedero'].includes(data.type)) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'El tipo de dispositivo debe ser: arenero, bebedero o comedero'
+      })
+    }
+
+    // Validar status si se proporciona
+    if (data.status && !['sin_comida', 'sin_arena', 'sin_agua', 'abastecido', 'lleno', 'sucio'].includes(data.status)) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'El status debe ser uno de: sin_comida, sin_arena, sin_agua, abastecido, lleno, sucio'
+      })
+    }
+
+    // Validar intervalo si se proporciona (debe ser positivo)
+    if (data.intervalo !== undefined && data.intervalo !== null && data.intervalo <= 0) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'El intervalo debe ser un número positivo'
+      })
+    }
+
+    // Validar comida si se proporciona (debe ser positivo o cero)
+    if (data.comida !== undefined && data.comida !== null && data.comida < 0) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'La cantidad de comida debe ser un número positivo o cero'
+      })
+    }
+
+    // Si se quiere cambiar de environment, validar que el nuevo environment pertenece al usuario
+    if (data.environmentId && data.environmentId !== deviceEnvir.idEnvironment) {
+      const newEnvironment = await Environment.query()
+        .where('id', data.environmentId)
+        .where('id_user', user.id)
+        .first()
+
+      if (!newEnvironment) {
+        return response.status(404).json({
+          status: 'error',
+          message: 'El nuevo environment especificado no existe o no tienes permisos'
+        })
+      }
+
+      // Verificar que no exista ya una asignación del mismo dispositivo en el nuevo environment
+      const existingInNewEnv = await DeviceEnvir.query()
+        .where('idDevice', deviceEnvir.idDevice)
+        .where('idEnvironment', data.environmentId)
+        .where('id', '!=', deviceEnvirId)
+        .first()
+
+      if (existingInNewEnv) {
+        return response.status(400).json({
+          status: 'error',
+          message: 'El dispositivo ya está asignado al environment especificado'
+        })
+      }
+    }
+
+    // Actualizar solo los campos que se proporcionaron
+    const updateData: any = {}
+    if (data.alias) updateData.alias = data.alias
+    if (data.type) updateData.type = data.type
+    if (data.status) updateData.status = data.status
+    if (data.intervalo !== undefined) updateData.intervalo = data.intervalo
+    if (data.comida !== undefined) updateData.comida = data.comida
+    if (data.environmentId) updateData.idEnvironment = data.environmentId
+
+    deviceEnvir.merge(updateData)
+    await deviceEnvir.save()
+
+    // Recargar las relaciones para la respuesta
+    await deviceEnvir.load('device')
+    await deviceEnvir.load('environment')
+
+    return response.ok({
+      status: 'success',
+      message: 'Configuración del dispositivo actualizada correctamente',
+      data: {
+        deviceEnvir,
+        device: {
+          id: deviceEnvir.device.id,
+          name: deviceEnvir.device.name,
+          code: deviceEnvir.device.code,
+          apiKey: deviceEnvir.device.apiKey
+        },
+        environment: {
+          id: deviceEnvir.environment.id,
+          name: deviceEnvir.environment.name,
+          color: deviceEnvir.environment.color
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Error al actualizar configuración del dispositivo:', error)
+    return response.status(500).json({
+      status: 'error',
+      message: 'Error al procesar la solicitud',
+      error: error.message
+    })
+  }
+}
+
+/**
+ * Eliminar una asignación device_envir
+ * Elimina la relación entre dispositivo y environment, pero mantiene ambos intactos
+ */
+public async deleteDeviceEnvironment({ params, auth, response }: HttpContext) {
+  try {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ message: 'No autenticado' })
+    }
+
+    const { deviceEnvirId } = params
+
+    // Buscar el registro device_envir con sus relaciones
+    const deviceEnvir = await DeviceEnvir.query()
+      .where('id', deviceEnvirId)
+      .preload('device')
+      .preload('environment')
+      .first()
+
+    if (!deviceEnvir) {
+      return response.status(404).json({
+        status: 'error',
+        message: 'Asignación de dispositivo no encontrada'
+      })
+    }
+
+    // Verificar que el environment pertenece al usuario
+    if (deviceEnvir.environment.idUser !== user.id) {
+      return response.status(403).json({
+        status: 'error',
+        message: 'No tienes permisos para eliminar esta asignación'
+      })
+    }
+
+    // Guardar información para la respuesta antes de eliminar
+    const deletedInfo = {
+      deviceEnvirId: deviceEnvir.id,
+      alias: deviceEnvir.alias,
+      type: deviceEnvir.type,
+      status: deviceEnvir.status,
+      device: {
+        id: deviceEnvir.device.id,
+        name: deviceEnvir.device.name,
+        code: deviceEnvir.device.code
+      },
+      environment: {
+        id: deviceEnvir.environment.id,
+        name: deviceEnvir.environment.name,
+        color: deviceEnvir.environment.color
+      }
+    }
+
+    // Eliminar la asignación
+    await deviceEnvir.delete()
+
+    return response.ok({
+      status: 'success',
+      message: 'Asignación de dispositivo eliminada correctamente',
+      data: {
+        deleted: deletedInfo,
+        note: 'El dispositivo y el environment se mantienen intactos, solo se eliminó la asignación'
+      }
+    })
+  } catch (error) {
+    console.error('Error al eliminar asignación del dispositivo:', error)
+    return response.status(500).json({
+      status: 'error',
+      message: 'Error al procesar la solicitud',
+      error: error.message
+    })
+  }
+}
+
+/**
  * Obtener environments disponibles para un usuario
  * Esta función ayuda en el formulario para mostrar las opciones
  */

@@ -62,6 +62,11 @@ router.group(() => {
   // Nueva funcionalidad para asignar dispositivos
   router.post('/assign-to-environment', [DevicesController, 'assignToEnvironment'])
   router.get('/user-environments', [DevicesController, 'getUserEnvironments'])
+  
+  // Nuevas rutas para gestión de device_envir
+  router.get('/device-envir/:deviceEnvirId', [DevicesController, 'getDeviceEnvironment'])
+  router.put('/device-envir/:deviceEnvirId', [DevicesController, 'updateDeviceEnvironment'])
+  router.delete('/device-envir/:deviceEnvirId', [DevicesController, 'deleteDeviceEnvironment'])
 }).prefix('/api/devices').use(middleware.auth())
 
 // Rutas de lecturas (readings)

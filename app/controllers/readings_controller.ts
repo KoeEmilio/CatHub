@@ -1,6 +1,7 @@
 import { HttpContext } from '@adonisjs/core/http'
 import Reading from '../models/readings.js'
 import Device from '../models/device.js'
+import DeviceEnvir from '../models/device_envir.js'
 
 export default class ReadingsController {
   /**
@@ -66,18 +67,32 @@ export default class ReadingsController {
       const { page = 1, limit = 50 } = request.qs()
       const { deviceId } = params
 
-      // Verificar que el dispositivo pertenece al usuario
+      // Verificar que el dispositivo pertenece al usuario a través de DeviceEnvir
       const device = await Device.query()
         .where('id', deviceId)
-        .preload('environment', (query) => {
-          query.where('id_user', user.id)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment', (envQuery) => {
+            envQuery.where('id_user', user.id)
+          })
         })
         .first()
 
-      if (!device || !device.environment) {
+      if (!device || !device.deviceEnvirs.length) {
         return response.status(404).json({
           status: 'error',
           message: 'Dispositivo no encontrado o no tienes permisos'
+        })
+      }
+
+      // Verificar que al menos una relación pertenece al usuario
+      const hasAccess = device.deviceEnvirs.some(deviceEnvir => 
+        deviceEnvir.environment && deviceEnvir.environment.idUser === user.id
+      )
+
+      if (!hasAccess) {
+        return response.status(403).json({
+          status: 'error',
+          message: 'No tienes permisos para acceder a este dispositivo'
         })
       }
 
@@ -130,18 +145,32 @@ export default class ReadingsController {
         })
       }
 
-      // Verificar que el dispositivo pertenece al usuario
+      // Verificar que el dispositivo pertenece al usuario a través de DeviceEnvir
       const device = await Device.query()
         .where('id', deviceId)
-        .preload('environment', (query) => {
-          query.where('id_user', user.id)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment', (envQuery) => {
+            envQuery.where('id_user', user.id)
+          })
         })
         .first()
 
-      if (!device || !device.environment) {
+      if (!device || !device.deviceEnvirs.length) {
         return response.status(404).json({
           status: 'error',
           message: 'Dispositivo no encontrado o no tienes permisos'
+        })
+      }
+
+      // Verificar que al menos una relación pertenece al usuario
+      const hasAccess = device.deviceEnvirs.some(deviceEnvir => 
+        deviceEnvir.environment && deviceEnvir.environment.idUser === user.id
+      )
+
+      if (!hasAccess) {
+        return response.status(403).json({
+          status: 'error',
+          message: 'No tienes permisos para acceder a este dispositivo'
         })
       }
 
@@ -179,18 +208,32 @@ export default class ReadingsController {
 
       const { deviceId } = params
 
-      // Verificar que el dispositivo pertenece al usuario
+      // Verificar que el dispositivo pertenece al usuario a través de DeviceEnvir
       const device = await Device.query()
         .where('id', deviceId)
-        .preload('environment', (query) => {
-          query.where('id_user', user.id)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment', (envQuery) => {
+            envQuery.where('id_user', user.id)
+          })
         })
         .first()
 
-      if (!device || !device.environment) {
+      if (!device || !device.deviceEnvirs.length) {
         return response.status(404).json({
           status: 'error',
           message: 'Dispositivo no encontrado o no tienes permisos'
+        })
+      }
+
+      // Verificar que al menos una relación pertenece al usuario
+      const hasAccess = device.deviceEnvirs.some(deviceEnvir => 
+        deviceEnvir.environment && deviceEnvir.environment.idUser === user.id
+      )
+
+      if (!hasAccess) {
+        return response.status(403).json({
+          status: 'error',
+          message: 'No tienes permisos para acceder a este dispositivo'
         })
       }
 
