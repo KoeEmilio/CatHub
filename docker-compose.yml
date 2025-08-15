@@ -57,12 +57,15 @@ services:
       - ./:/app
     networks:
       - igmar-net
+      - frontend-net
 
 networks:
   igmar-net:
     external: true
     driver: bridge
-
+  
+  frontend-net:
+    driver: bridge
 
 volumes:
   mongo-data:
