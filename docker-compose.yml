@@ -2,32 +2,22 @@ services:
   mongo:
     image: mongo:7.0.18
     container_name: mongo
+    hostname: www.atenasoficial.com   # 🔹 clave para que Mongo se detecte así
     restart: always
     ports:
-      - "${MONGO_PORT}:27017"
+      - "${MONGO_PORT}:${MONGO_PORT}"
+    extra_hosts:
+      - "www.atenasoficial.com:${PRIVATE_IP}"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
       MONGO_INITDB_DATABASE: ${MONGO_DB}
-    # command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo-keyfile/mongodb-keyfile"]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "${MONGO_PORT}", "--keyFile", "/data/configdb/mongodb-keyfile"]
     volumes:
       - mongo-data:/data/db
+      - ./keyfile:/data/configdb
     networks:
       - igmar-net
-
-  # mongo-init-replica:
-  #   image: mongo:7.0.18
-  #   depends_on:
-  #     - mongo
-  #   entrypoint: >
-  #     bash -c "
-  #     sleep 5;
-  #     mongo --host mongo -u ${MONGO_USER} -p ${MONGO_PASSWORD} --authenticationDatabase admin /scripts/init-rs.js
-  #     "
-  #   volumes:
-  #     - ./scripts:/scripts
-  # networks:
-  #   - igmar-net
 
   postgres:
     image: postgres:17.5
@@ -47,7 +37,7 @@ services:
   cathub:
     build: .
     ports:
-      - "3333:3333"
+      - "${API_PORT}:3333"
     restart: unless-stopped
     environment:
       LOG_LEVEL: info
@@ -57,12 +47,12 @@ services:
       HOST: 0.0.0.0
       NODE_ENV: development
       DB_CONNECTION: pg
-      DB_USER: admin
-      DB_PASSWORD: admin123
-      DB_DATABASE: db_cathub
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_DATABASE: ${POSTGRES_DB}
       DB_HOST: postgres
       DB_PORT: 5432
-      MONGO_URL: mongodb://admin:admin123@mongo:27017/db_cathub?authSource=admin
+      MONGO_URL: mongodb://${MONGO_USER}:${MONGO_PASSWOR}D@mongo:27017/${MONGO_DB}?authSource=admin
     volumes:
       - ./:/app
     networks:
