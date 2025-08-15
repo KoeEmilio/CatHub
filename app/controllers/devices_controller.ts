@@ -332,7 +332,7 @@ public async getAllDevices({ auth, response }: HttpContext) {
 
 /**
  * Asignar un dispositivo a un environment
- * Busca el dispositivo por código y lo asigna al environment seleccionado
+ * Ahora el código se ingresa y valida según el tipo de dispositivo
  */
 public async assignToEnvironment({ request, response, auth }: HttpContext) {
   try {
@@ -359,15 +359,12 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Buscar el dispositivo por código
-    const device = await Device.query()
-      .where('code', data.deviceCode)
-      .first()
-
-    if (!device) {
-      return response.status(404).json({
+    // Validar formato del código
+    const codeValidation = DeviceEnvir.validateDeviceCode(data.deviceCode, data.type)
+    if (!codeValidation.isValid) {
+      return response.status(400).json({
         status: 'error',
-        message: `No se encontró un dispositivo con el código: ${data.deviceCode}`
+        message: codeValidation.message
       })
     }
 
@@ -384,24 +381,30 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Verificar si el dispositivo ya está asignado a este environment
-    const existingAssignment = await DeviceEnvir.query()
-      .where('idDevice', device.id)
-      .where('idEnvironment', data.environmentId)
+    // Verificar si el código ya existe
+    const existingCode = await DeviceEnvir.query()
+      .where('code', data.deviceCode)
       .first()
 
-    if (existingAssignment) {
+    if (existingCode) {
       return response.status(400).json({
         status: 'error',
-        message: 'El dispositivo ya está asignado a este environment'
+        message: `El código ${data.deviceCode} ya está en uso. Ingresa un código diferente.`
       })
     }
+
+    // Crear un nuevo dispositivo (asumiendo que cada asignación es un nuevo dispositivo)
+    const device = await Device.create({
+      name: data.alias, // Usar el alias como nombre del dispositivo
+      apiKey: `device_${randomUUID()}` // Generar API key único
+    })
 
     // Crear la asignación en device_envir
     const deviceEnvir = await DeviceEnvir.create({
       alias: data.alias,
       type: data.type,
-      status: data.status || 'activo',
+      code: data.deviceCode,
+      status: data.status || 'abastecido',
       idDevice: device.id,
       idEnvironment: data.environmentId
     })
@@ -418,7 +421,6 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
         device: {
           id: device.id,
           name: device.name,
-          code: device.code,
           apiKey: device.apiKey
         },
         environment: {
@@ -482,10 +484,10 @@ public async getDeviceEnvironment({ params, auth, response }: HttpContext) {
         status: deviceEnvir.status,
         intervalo: deviceEnvir.intervalo,
         comida: deviceEnvir.comida,
+        code: deviceEnvir.code, // Ahora el código está en device_envir
         device: {
           id: deviceEnvir.device.id,
           name: deviceEnvir.device.name,
-          code: deviceEnvir.device.code,
           apiKey: deviceEnvir.device.apiKey
         },
         environment: {
@@ -519,7 +521,7 @@ public async updateDeviceEnvironment({ params, request, response, auth }: HttpCo
     }
 
     const { deviceEnvirId } = params
-    const data = request.only(['alias', 'type', 'status', 'intervalo', 'comida', 'environmentId'])
+    const data = request.only(['alias', 'type', 'status', 'intervalo', 'comida', 'environmentId', 'code'])
 
     // Buscar el registro device_envir
     const deviceEnvir = await DeviceEnvir.query()
@@ -575,6 +577,31 @@ public async updateDeviceEnvironment({ params, request, response, auth }: HttpCo
       })
     }
 
+    // Validar código si se proporciona
+    if (data.code) {
+      // Validar formato del código
+      const codeValidation = DeviceEnvir.validateDeviceCode(data.code, data.type || deviceEnvir.type)
+      if (!codeValidation.isValid) {
+        return response.status(400).json({
+          status: 'error',
+          message: codeValidation.message
+        })
+      }
+
+      // Verificar si el código ya existe (excepto el actual)
+      const existingCode = await DeviceEnvir.query()
+        .where('code', data.code)
+        .where('id', '!=', deviceEnvirId)
+        .first()
+
+      if (existingCode) {
+        return response.status(400).json({
+          status: 'error',
+          message: `El código ${data.code} ya está en uso. Ingresa un código diferente.`
+        })
+      }
+    }
+
     // Si se quiere cambiar de environment, validar que el nuevo environment pertenece al usuario
     if (data.environmentId && data.environmentId !== deviceEnvir.idEnvironment) {
       const newEnvironment = await Environment.query()
@@ -609,6 +636,7 @@ public async updateDeviceEnvironment({ params, request, response, auth }: HttpCo
     if (data.alias) updateData.alias = data.alias
     if (data.type) updateData.type = data.type
     if (data.status) updateData.status = data.status
+    if (data.code) updateData.code = data.code
     if (data.intervalo !== undefined) updateData.intervalo = data.intervalo
     if (data.comida !== undefined) updateData.comida = data.comida
     if (data.environmentId) updateData.idEnvironment = data.environmentId
@@ -628,7 +656,6 @@ public async updateDeviceEnvironment({ params, request, response, auth }: HttpCo
         device: {
           id: deviceEnvir.device.id,
           name: deviceEnvir.device.name,
-          code: deviceEnvir.device.code,
           apiKey: deviceEnvir.device.apiKey
         },
         environment: {
@@ -689,10 +716,10 @@ public async deleteDeviceEnvironment({ params, auth, response }: HttpContext) {
       alias: deviceEnvir.alias,
       type: deviceEnvir.type,
       status: deviceEnvir.status,
+      code: deviceEnvir.code, // Ahora el código está en device_envir
       device: {
         id: deviceEnvir.device.id,
-        name: deviceEnvir.device.name,
-        code: deviceEnvir.device.code
+        name: deviceEnvir.device.name
       },
       environment: {
         id: deviceEnvir.environment.id,
@@ -721,6 +748,8 @@ public async deleteDeviceEnvironment({ params, auth, response }: HttpContext) {
     })
   }
 }
+
+
 
 /**
  * Obtener environments disponibles para un usuario

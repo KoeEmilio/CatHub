@@ -456,40 +456,40 @@ export default class StatusesController {
   async setComida({ params, request, response }: HttpContext) {
     try {
       const deviceEnvirId = params.id
-      const { gramos } = request.only(['gramos'])
+      const { comida } = request.only(['comida'])
 
-      if (gramos === undefined || gramos < 0) {
+      if (comida === undefined || comida < 0) {
         return response.badRequest({
-          message: 'Los gramos deben ser un número positivo o cero'
+          message: 'La cantidad de comida debe ser un número positivo o cero'
         })
       }
 
       const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
 
       const previousAmount = deviceEnvir.comida
-      deviceEnvir.comida = gramos
+      deviceEnvir.comida = comida
       await deviceEnvir.save()
 
       // Emitir evento WebSocket de actualización de comida
-      WebSocketService.emitFoodUpdate(deviceEnvir, gramos, previousAmount)
+      WebSocketService.emitFoodUpdate(deviceEnvir, comida, previousAmount)
 
       // Verificar si necesita alerta de comida baja
-      if (gramos <= 50) {
-        WebSocketService.emitLowFoodAlert(deviceEnvir, gramos)
+      if (comida <= 50) {
+        WebSocketService.emitLowFoodAlert(deviceEnvir, comida)
       }
 
       // Si no hay comida, cambiar estado automáticamente
-      if (gramos === 0 && deviceEnvir.type === 'comedero') {
+      if (comida === 0 && deviceEnvir.type === 'comedero') {
         deviceEnvir.status = 'sin_comida'
         await deviceEnvir.save()
         WebSocketService.emitStatusChange(deviceEnvir, 'sin_comida')
       }
 
       return response.ok({
-        message: `Cantidad de comida configurada a ${gramos} gramos`,
+        message: `Cantidad de comida configurada a ${comida} gramos`,
         device: deviceEnvir,
         previousAmount,
-        difference: previousAmount ? gramos - previousAmount : gramos
+        difference: previousAmount ? comida - previousAmount : comida
       })
     } catch (error) {
       return response.badRequest({
@@ -529,17 +529,17 @@ export default class StatusesController {
   async addComida({ params, request, response }: HttpContext) {
     try {
       const deviceEnvirId = params.id
-      const { gramos } = request.only(['gramos'])
+      const { comida } = request.only(['comida'])
 
-      if (!gramos || gramos <= 0) {
+      if (!comida || comida <= 0) {
         return response.badRequest({
-          message: 'Los gramos a agregar deben ser un número positivo'
+          message: 'La cantidad de comida a agregar debe ser un número positivo'
         })
       }
 
       const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
       const previousAmount = deviceEnvir.comida || 0
-      const newAmount = previousAmount + gramos
+      const newAmount = previousAmount + comida
 
       deviceEnvir.comida = newAmount
       await deviceEnvir.save()
@@ -555,10 +555,10 @@ export default class StatusesController {
       }
 
       return response.ok({
-        message: `Se agregaron ${gramos}g de comida`,
+        message: `Se agregaron ${comida}g de comida`,
         device: deviceEnvir,
         previousAmount,
-        addedAmount: gramos,
+        addedAmount: comida,
         newTotal: newAmount
       })
     } catch (error) {
@@ -575,17 +575,17 @@ export default class StatusesController {
   async consumeComida({ params, request, response }: HttpContext) {
     try {
       const deviceEnvirId = params.id
-      const { gramos } = request.only(['gramos'])
+      const { comida } = request.only(['comida'])
 
-      if (!gramos || gramos <= 0) {
+      if (!comida || comida <= 0) {
         return response.badRequest({
-          message: 'Los gramos a consumir deben ser un número positivo'
+          message: 'La cantidad de comida a consumir debe ser un número positivo'
         })
       }
 
       const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
       const previousAmount = deviceEnvir.comida || 0
-      const newAmount = Math.max(0, previousAmount - gramos) // No permitir negativos
+      const newAmount = Math.max(0, previousAmount - comida) // No permitir negativos
 
       deviceEnvir.comida = newAmount
       await deviceEnvir.save()
@@ -605,10 +605,10 @@ export default class StatusesController {
       }
 
       return response.ok({
-        message: `Se consumieron ${Math.min(gramos, previousAmount)}g de comida`,
+        message: `Se consumieron ${Math.min(comida, previousAmount)}g de comida`,
         device: deviceEnvir,
         previousAmount,
-        consumedAmount: Math.min(gramos, previousAmount),
+        consumedAmount: Math.min(comida, previousAmount),
         remainingAmount: newAmount
       })
     } catch (error) {

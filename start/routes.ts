@@ -117,7 +117,7 @@ router.group(() => {
   router.put('/:id', [StatusesController, 'updateStatus'])
   
   // Rutas para intervalos de areneros
-  router.put('/:id/intervalo', [StatusesController, 'setIntervalo'])
+  router.post('/:id/intervalo', [StatusesController, 'setIntervalo'])
   router.get('/:id/intervalo', [StatusesController, 'getIntervalo'])
   router.get('/areneros/all', [StatusesController, 'getAreneros'])
   
@@ -127,7 +127,7 @@ router.group(() => {
   router.post('/:id/cleaning-reminder', [StatusesController, 'sendCleaningReminder'])
   
   // Rutas para manejo de comida
-  router.put('/:id/comida', [StatusesController, 'setComida'])
+  router.post('/:id/comida', [StatusesController, 'setComida'])
   router.get('/:id/comida', [StatusesController, 'getComida'])
   router.post('/:id/add-comida', [StatusesController, 'addComida'])
   router.post('/:id/consume-comida', [StatusesController, 'consumeComida'])

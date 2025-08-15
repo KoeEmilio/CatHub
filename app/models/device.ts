@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon'
-import { BaseModel, column, belongsTo, hasMany, manyToMany } from '@adonisjs/lucid/orm'
-import type { BelongsTo, HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
+import { BaseModel, column, hasMany, manyToMany } from '@adonisjs/lucid/orm'
+import type { HasMany, ManyToMany } from '@adonisjs/lucid/types/relations'
 import DeviceEnvir from './device_envir.js'
 import DeviceSetting from './device_setting.js'
 import Sensor from './sensor.js'
@@ -14,9 +14,6 @@ export default class Device extends BaseModel {
 
   @column()
   declare apiKey: string  // Token único para cada dispositivo
-
-  @column()
-  declare code: string
 
   @hasMany(() => DeviceEnvir, {
     foreignKey: 'idDevice',
