@@ -451,6 +451,175 @@ export default class StatusesController {
   }
 
   /**
+   * Configurar cantidad de comida en gramos
+   */
+  async setComida({ params, request, response }: HttpContext) {
+    try {
+      const deviceEnvirId = params.id
+      const { gramos } = request.only(['gramos'])
+
+      if (gramos === undefined || gramos < 0) {
+        return response.badRequest({
+          message: 'Los gramos deben ser un número positivo o cero'
+        })
+      }
+
+      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
+
+      const previousAmount = deviceEnvir.comida
+      deviceEnvir.comida = gramos
+      await deviceEnvir.save()
+
+      // Emitir evento WebSocket de actualización de comida
+      WebSocketService.emitFoodUpdate(deviceEnvir, gramos, previousAmount)
+
+      // Verificar si necesita alerta de comida baja
+      if (gramos <= 50) {
+        WebSocketService.emitLowFoodAlert(deviceEnvir, gramos)
+      }
+
+      // Si no hay comida, cambiar estado automáticamente
+      if (gramos === 0 && deviceEnvir.type === 'comedero') {
+        deviceEnvir.status = 'sin_comida'
+        await deviceEnvir.save()
+        WebSocketService.emitStatusChange(deviceEnvir, 'sin_comida')
+      }
+
+      return response.ok({
+        message: `Cantidad de comida configurada a ${gramos} gramos`,
+        device: deviceEnvir,
+        previousAmount,
+        difference: previousAmount ? gramos - previousAmount : gramos
+      })
+    } catch (error) {
+      return response.badRequest({
+        message: 'Error al configurar comida',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Obtener cantidad de comida de un dispositivo
+   */
+  async getComida({ params, response }: HttpContext) {
+    try {
+      const deviceEnvirId = params.id
+      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
+
+      return response.ok({
+        deviceEnvirId: deviceEnvir.id,
+        alias: deviceEnvir.alias,
+        type: deviceEnvir.type,
+        comida: deviceEnvir.comida,
+        status: deviceEnvir.status,
+        lastUpdate: deviceEnvir.updatedAt
+      })
+    } catch (error) {
+      return response.badRequest({
+        message: 'Error al obtener cantidad de comida',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Agregar comida (incrementar)
+   */
+  async addComida({ params, request, response }: HttpContext) {
+    try {
+      const deviceEnvirId = params.id
+      const { gramos } = request.only(['gramos'])
+
+      if (!gramos || gramos <= 0) {
+        return response.badRequest({
+          message: 'Los gramos a agregar deben ser un número positivo'
+        })
+      }
+
+      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
+      const previousAmount = deviceEnvir.comida || 0
+      const newAmount = previousAmount + gramos
+
+      deviceEnvir.comida = newAmount
+      await deviceEnvir.save()
+
+      // Emitir evento WebSocket
+      WebSocketService.emitFoodUpdate(deviceEnvir, newAmount, previousAmount)
+
+      // Si se agrega comida y estaba sin comida, cambiar estado
+      if (previousAmount === 0 && deviceEnvir.type === 'comedero' && deviceEnvir.status === 'sin_comida') {
+        deviceEnvir.status = 'abastecido'
+        await deviceEnvir.save()
+        WebSocketService.emitStatusChange(deviceEnvir, 'abastecido')
+      }
+
+      return response.ok({
+        message: `Se agregaron ${gramos}g de comida`,
+        device: deviceEnvir,
+        previousAmount,
+        addedAmount: gramos,
+        newTotal: newAmount
+      })
+    } catch (error) {
+      return response.badRequest({
+        message: 'Error al agregar comida',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Consumir comida (decrementar)
+   */
+  async consumeComida({ params, request, response }: HttpContext) {
+    try {
+      const deviceEnvirId = params.id
+      const { gramos } = request.only(['gramos'])
+
+      if (!gramos || gramos <= 0) {
+        return response.badRequest({
+          message: 'Los gramos a consumir deben ser un número positivo'
+        })
+      }
+
+      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
+      const previousAmount = deviceEnvir.comida || 0
+      const newAmount = Math.max(0, previousAmount - gramos) // No permitir negativos
+
+      deviceEnvir.comida = newAmount
+      await deviceEnvir.save()
+
+      // Emitir evento WebSocket
+      WebSocketService.emitFoodUpdate(deviceEnvir, newAmount, previousAmount)
+
+      // Verificar alertas y cambios de estado
+      if (newAmount <= 50) {
+        WebSocketService.emitLowFoodAlert(deviceEnvir, newAmount)
+      }
+
+      if (newAmount === 0 && deviceEnvir.type === 'comedero') {
+        deviceEnvir.status = 'sin_comida'
+        await deviceEnvir.save()
+        WebSocketService.emitStatusChange(deviceEnvir, 'sin_comida')
+      }
+
+      return response.ok({
+        message: `Se consumieron ${Math.min(gramos, previousAmount)}g de comida`,
+        device: deviceEnvir,
+        previousAmount,
+        consumedAmount: Math.min(gramos, previousAmount),
+        remainingAmount: newAmount
+      })
+    } catch (error) {
+      return response.badRequest({
+        message: 'Error al consumir comida',
+        error: error.message
+      })
+    }
+  }
+
+  /**
    * Emitir evento WebSocket cuando cambia el estado
    */
   private emitStatusChange(deviceEnvirId: number, status: string, deviceEnvir: DeviceEnvir) {

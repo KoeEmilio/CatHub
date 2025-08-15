@@ -91,6 +91,7 @@ router.group(() => {
   router.post('/deactivate/:deviceEnvirId', [DeviceStatusController, 'deactivate'])
   router.post('/start-filling/:deviceEnvirId', [DeviceStatusController, 'startFilling'])
   router.post('/mark-empty/:deviceEnvirId', [DeviceStatusController, 'markEmpty'])
+  router.post('/mark-dirty/:deviceEnvirId', [DeviceStatusController, 'markDirty'])
 }).prefix('/api/device-control').use(middleware.auth())
 
 // Rutas para el manejo de estados específicos de dispositivos
@@ -119,7 +120,13 @@ router.group(() => {
   router.post('/:id/start-cleaning', [StatusesController, 'startAutomaticCleaning'])
   router.post('/:id/complete-cleaning', [StatusesController, 'completeAutomaticCleaning'])
   router.post('/:id/cleaning-reminder', [StatusesController, 'sendCleaningReminder'])
-}).prefix('/api/device-status').use(middleware.auth())
+  
+  // Rutas para manejo de comida
+  router.put('/:id/comida', [StatusesController, 'setComida'])
+  router.get('/:id/comida', [StatusesController, 'getComida'])
+  router.post('/:id/add-comida', [StatusesController, 'addComida'])
+  router.post('/:id/consume-comida', [StatusesController, 'consumeComida'])
+}).prefix('/api/device/status').use(middleware.auth())
 
 // Ruta simple para información del WebSocket
 router.get('/api/websocket/info', async ({ response }) => {

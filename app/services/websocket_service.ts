@@ -215,6 +215,80 @@ class WebSocketService {
     console.log(`Recordatorio de limpieza: ${deviceEnvir.alias} en ${minutesUntilNext} minutos`)
   }
 
+  // Emitir evento de actualización de comida
+  emitFoodUpdate(deviceEnvir: DeviceEnvir, newAmount: number, previousAmount: number | null) {
+    if (!this.io) {
+      console.warn('WebSocket no inicializado')
+      return
+    }
+
+    const eventData = {
+      deviceEnvirId: deviceEnvir.id,
+      environmentId: deviceEnvir.idEnvironment,
+      deviceId: deviceEnvir.idDevice,
+      alias: deviceEnvir.alias,
+      type: deviceEnvir.type,
+      comidaGramos: newAmount,
+      comidaAnterior: previousAmount,
+      diferencia: previousAmount ? newAmount - previousAmount : newAmount,
+      mensaje: this.getFoodUpdateMessage(deviceEnvir.alias, newAmount, previousAmount),
+      timestamp: new Date().toISOString()
+    }
+
+    // Emitir a todos los clientes conectados
+    this.io.emit('food_updated', eventData)
+
+    console.log(`Comida actualizada: ${deviceEnvir.alias} ahora tiene ${newAmount}g`)
+  }
+
+  // Emitir alerta de comida baja
+  emitLowFoodAlert(deviceEnvir: DeviceEnvir, currentAmount: number, threshold: number = 50) {
+    if (!this.io) return
+
+    const alertData = {
+      deviceEnvirId: deviceEnvir.id,
+      environmentId: deviceEnvir.idEnvironment,
+      deviceId: deviceEnvir.idDevice,
+      alias: deviceEnvir.alias,
+      type: deviceEnvir.type,
+      comidaActual: currentAmount,
+      umbral: threshold,
+      severity: currentAmount <= 0 ? 'critical' : currentAmount <= 20 ? 'high' : 'medium',
+      message: this.getLowFoodMessage(deviceEnvir.alias, currentAmount),
+      timestamp: new Date().toISOString()
+    }
+
+    this.io.emit('low_food_alert', alertData)
+    console.log(`Alerta de comida baja: ${deviceEnvir.alias} tiene ${currentAmount}g`)
+  }
+
+  // Generar mensaje de actualización de comida
+  private getFoodUpdateMessage(alias: string, newAmount: number, previousAmount: number | null): string {
+    if (previousAmount === null) {
+      return `${alias}: comida configurada a ${newAmount}g`
+    }
+    
+    const difference = newAmount - previousAmount
+    if (difference > 0) {
+      return `${alias}: se agregaron ${difference}g de comida (total: ${newAmount}g)`
+    } else if (difference < 0) {
+      return `${alias}: se consumieron ${Math.abs(difference)}g de comida (quedan: ${newAmount}g)`
+    } else {
+      return `${alias}: cantidad de comida actualizada (${newAmount}g)`
+    }
+  }
+
+  // Generar mensaje de comida baja
+  private getLowFoodMessage(alias: string, currentAmount: number): string {
+    if (currentAmount <= 0) {
+      return `¡CRÍTICO! ${alias} está completamente sin comida`
+    } else if (currentAmount <= 20) {
+      return `¡ALERTA! ${alias} tiene muy poca comida (${currentAmount}g)`
+    } else {
+      return `AVISO: ${alias} tiene poca comida (${currentAmount}g)`
+    }
+  }
+
   // Obtener número de clientes conectados
   getConnectedClients(): number {
     return this.io ? this.io.engine.clientsCount : 0

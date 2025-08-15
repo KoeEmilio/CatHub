@@ -23,6 +23,9 @@ export default class DeviceEnvir extends BaseModel {
   declare intervalo: number | null
 
   @column()
+  declare comida: number | null
+
+  @column()
   declare idDevice: number
 
   @column()

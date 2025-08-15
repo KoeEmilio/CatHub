@@ -115,6 +115,22 @@ export default class EnvironmentsController {
         return response.unauthorized({ message: 'No autenticado' })
       }
 
+      console.log('Debug - Update Environment:')
+      console.log('- Environment ID:', params.id)
+      console.log('- User ID:', user.id)
+
+      // Primero verificar si el environment existe (sin filtro de usuario)
+      const environmentExists = await Environment.query()
+        .where('id', params.id)
+        .first()
+
+      console.log('- Environment exists:', !!environmentExists)
+      if (environmentExists) {
+        console.log('- Environment owner ID:', environmentExists.idUser)
+        console.log('- Requesting user ID:', user.id)
+        console.log('- Owner match:', environmentExists.idUser === user.id)
+      }
+
       const environment = await Environment.query()
         .where('id', params.id)
         .where('id_user', user.id)
@@ -123,7 +139,13 @@ export default class EnvironmentsController {
       if (!environment) {
         return response.status(404).json({
           status: 'error',
-          message: 'Entorno no encontrado'
+          message: 'Entorno no encontrado o no tienes permisos para modificarlo',
+          debug: {
+            environmentId: params.id,
+            userId: user.id,
+            environmentExists: !!environmentExists,
+            ownerMismatch: environmentExists ? environmentExists.idUser !== user.id : false
+          }
         })
       }
 
@@ -137,6 +159,7 @@ export default class EnvironmentsController {
         data: environment
       })
     } catch (error) {
+      console.error('Error al actualizar entorno:', error)
       return response.status(500).json({
         status: 'error',
         message: 'Error al actualizar entorno',

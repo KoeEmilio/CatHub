@@ -17,7 +17,7 @@ export default class Environment extends BaseModel {
   @column()
   declare color: string
 
-  @column()
+  @column({ columnName: 'id_user' })
   declare idUser: number
 
   @belongsTo(() => User, {

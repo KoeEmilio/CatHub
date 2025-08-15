@@ -25,7 +25,7 @@ export default class DeviceStatusController {
       const { status } = request.only(['status'])
 
       // Validar status
-      const validStatuses = ['activo', 'inactivo', 'llenando', 'vacio', 'mantenimiento', 'error']
+      const validStatuses = ['sin_comida', 'sin_arena', 'sin_agua', 'abastecido', 'lleno', 'sucio']
       if (!status || !validStatuses.includes(status)) {
         return response.status(400).json({
           status: 'error',
@@ -236,35 +236,96 @@ export default class DeviceStatusController {
   }
 
   /**
-   * Activar dispositivo (cambiar a 'activo')
+   * Activar dispositivo (cambiar a 'abastecido')
    */
   public async activate({ params, auth, response }: HttpContext) {
     const { deviceEnvirId } = params
-    return this.updateStatusHelper(deviceEnvirId, 'activo', 'activado', auth, response)
+    return this.updateStatusHelper(deviceEnvirId, 'abastecido', 'activado', auth, response)
   }
 
   /**
-   * Desactivar dispositivo (cambiar a 'inactivo')
+   * Desactivar dispositivo (cambiar a estado según tipo)
    */
   public async deactivate({ params, auth, response }: HttpContext) {
     const { deviceEnvirId } = params
-    return this.updateStatusHelper(deviceEnvirId, 'inactivo', 'desactivado', auth, response)
+    // Para desactivar, determinamos el estado según el tipo de dispositivo
+    return this.updateStatusHelper(deviceEnvirId, 'sin_comida', 'desactivado', auth, response)
   }
 
   /**
-   * Iniciar llenado del dispositivo
+   * Iniciar llenado del dispositivo (cambiar a 'lleno')
    */
   public async startFilling({ params, auth, response }: HttpContext) {
     const { deviceEnvirId } = params
-    return this.updateStatusHelper(deviceEnvirId, 'llenando', 'llenado iniciado', auth, response)
+    return this.updateStatusHelper(deviceEnvirId, 'lleno', 'llenado iniciado', auth, response)
   }
 
   /**
-   * Marcar dispositivo como vacío
+   * Marcar dispositivo como vacío (según tipo)
    */
   public async markEmpty({ params, auth, response }: HttpContext) {
+    try {
+      const user = auth.user
+      if (!user) {
+        return response.unauthorized({ message: 'No autenticado' })
+      }
+
+      const { deviceEnvirId } = params
+
+      // Primero obtener el dispositivo para saber su tipo
+      const deviceEnvir = await DeviceEnvir.query()
+        .where('id', deviceEnvirId)
+        .preload('environment')
+        .first()
+
+      if (!deviceEnvir) {
+        return response.status(404).json({
+          status: 'error',
+          message: 'Dispositivo no encontrado'
+        })
+      }
+
+      // Verificar permisos
+      if (deviceEnvir.environment.idUser !== user.id) {
+        return response.status(403).json({
+          status: 'error',
+          message: 'No tienes permisos para controlar este dispositivo'
+        })
+      }
+
+      // Determinar el estado "vacío" según el tipo de dispositivo
+      let emptyStatus: 'sin_comida' | 'sin_arena' | 'sin_agua'
+      switch (deviceEnvir.type) {
+        case 'comedero':
+          emptyStatus = 'sin_comida'
+          break
+        case 'bebedero':
+          emptyStatus = 'sin_agua'
+          break
+        case 'arenero':
+          emptyStatus = 'sin_arena'
+          break
+        default:
+          emptyStatus = 'sin_comida' // fallback
+      }
+
+      return this.updateStatusHelper(deviceEnvirId, emptyStatus, `marcado como vacío (${emptyStatus})`, auth, response)
+    } catch (error) {
+      console.error('Error al marcar como vacío:', error)
+      return response.status(500).json({
+        status: 'error',
+        message: 'Error al marcar dispositivo como vacío',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Marcar arenero como sucio
+   */
+  public async markDirty({ params, auth, response }: HttpContext) {
     const { deviceEnvirId } = params
-    return this.updateStatusHelper(deviceEnvirId, 'vacio', 'marcado como vacío', auth, response)
+    return this.updateStatusHelper(deviceEnvirId, 'sucio', 'marcado como sucio', auth, response)
   }
 
   /**
@@ -272,7 +333,7 @@ export default class DeviceStatusController {
    */
   private async updateStatusHelper(
     deviceEnvirId: string,
-    newStatus: string,
+    newStatus: 'sin_comida' | 'sin_arena' | 'sin_agua' | 'abastecido' | 'lleno' | 'sucio',
     actionMessage: string,
     auth: any,
     response: any
