@@ -17,6 +17,9 @@ export default class DeviceEnvir extends BaseModel {
   declare type: 'arenero' | 'bebedero' | 'comedero'
 
   @column()
+  declare status: '0' | '1'
+
+  @column()
   declare idDevice: number
 
   @column()

@@ -16,9 +16,6 @@ export default class Device extends BaseModel {
   @column()
   declare apiKey: string  // Token único para cada dispositivo
 
-  @column()
-  declare idEnvironment: number
-
   @belongsTo(() => Environment, {
     foreignKey: 'idEnvironment',
   })
