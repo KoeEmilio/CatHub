@@ -6,30 +6,24 @@ export default class DeviceSeeder extends BaseSeeder {
     // Crear dispositivos de ejemplo
     await Device.createMany([
       {
-        name: 'Monitor Sala Principal',
+        name: 'Bebedero increible',
         apiKey: '550e8400-e29b-41d4-a716-446655440001',
+        code: 'BE0001',
          // Asumiendo que existe un environment con ID 1
       },
       {
-        name: 'Sensor Comedor',
+        name: 'comedor grande',
         apiKey: '550e8400-e29b-41d4-a716-446655440002',
-        
+        code: 'CO0001',
+
       },
       {
-        name: 'Control Dormitorio',
+        name: 'arenero espacioso',
         apiKey: '550e8400-e29b-41d4-a716-446655440003',
+        code: 'AR0001',
          // Asumiendo que existe un environment con ID 2
       },
-      {
-        name: 'Monitor Jardín',
-        apiKey: '550e8400-e29b-41d4-a716-446655440004',
-        
-      },
-      {
-        name: 'Estación Baño',
-        apiKey: '550e8400-e29b-41d4-a716-446655440005',
-         // Asumiendo que existe un environment con ID 3
-      }
+
     ])
 
     console.log('✅ Dispositivos creados correctamente')

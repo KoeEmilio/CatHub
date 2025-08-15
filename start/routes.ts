@@ -16,6 +16,7 @@ const EnvironmentsController = () => import('../app/controllers/environments_con
 const DevicesController = () => import('../app/controllers/devices_controller.js')
 const ReadingsController = () => import('../app/controllers/readings_controller.js')
 const DeviceConfigController = () => import('../app/controllers/device_config_controller.js')
+const DeviceStatusController = () => import('../app/controllers/device_status_controller.js')
 
 router.get('/', async () => {
   return {
@@ -46,7 +47,7 @@ router.group(() => {
   router.get('/:id', [EnvironmentsController, 'show'])
   router.put('/:id', [EnvironmentsController, 'update'])
   router.delete('/:id', [EnvironmentsController, 'destroy'])
-}).prefix('/api/environments').use(middleware.auth())
+}).prefix('/api/enviroments').use(middleware.auth())
 
 // Rutas de dispositivos
 router.group(() => {
@@ -56,6 +57,10 @@ router.group(() => {
   router.get('/:id', [DevicesController, 'show'])
   router.put('/:id', [DevicesController, 'update'])
   router.delete('/:id', [DevicesController, 'destroy'])
+  
+  // Nueva funcionalidad para asignar dispositivos
+  router.post('/assign-to-environment', [DevicesController, 'assignToEnvironment'])
+  router.get('/user-environments', [DevicesController, 'getUserEnvironments'])
 }).prefix('/api/devices').use(middleware.auth())
 
 // Rutas de lecturas (readings)
@@ -72,3 +77,17 @@ router.group(() => {
   router.post('/config', [DeviceConfigController, 'updateConfiguration'])
   router.post('/sensor-data', [DeviceConfigController, 'sendSensorData'])
 }).prefix('/api/device').use(middleware.deviceAuth())
+
+// Rutas de control de estado de dispositivos (IoT)
+router.group(() => {
+  // Rutas generales de status
+  router.put('/status/:deviceEnvirId', [DeviceStatusController, 'updateStatus'])
+  router.get('/status/:deviceEnvirId', [DeviceStatusController, 'getStatus'])
+  router.get('/environment/:environmentId/status', [DeviceStatusController, 'getEnvironmentDevicesStatus'])
+  
+  // Rutas de acciones específicas
+  router.post('/activate/:deviceEnvirId', [DeviceStatusController, 'activate'])
+  router.post('/deactivate/:deviceEnvirId', [DeviceStatusController, 'deactivate'])
+  router.post('/start-filling/:deviceEnvirId', [DeviceStatusController, 'startFilling'])
+  router.post('/mark-empty/:deviceEnvirId', [DeviceStatusController, 'markEmpty'])
+}).prefix('/api/device-control').use(middleware.auth())

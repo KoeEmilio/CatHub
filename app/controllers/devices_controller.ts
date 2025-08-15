@@ -329,4 +329,141 @@ public async getAllDevices({ auth, response }: HttpContext) {
     })
   }
 }
+
+/**
+ * Asignar un dispositivo a un environment
+ * Busca el dispositivo por código y lo asigna al environment seleccionado
+ */
+public async assignToEnvironment({ request, response, auth }: HttpContext) {
+  try {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ message: 'No autenticado' })
+    }
+
+    const data = request.only(['deviceCode', 'environmentId', 'alias', 'type', 'status'])
+    
+    // Validar datos requeridos
+    if (!data.deviceCode || !data.environmentId || !data.alias || !data.type) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'Todos los campos son obligatorios: deviceCode, environmentId, alias, type'
+      })
+    }
+
+    // Validar tipo de dispositivo
+    if (!['arenero', 'bebedero', 'comedero'].includes(data.type)) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'El tipo de dispositivo debe ser: arenero, bebedero o comedero'
+      })
+    }
+
+    // Buscar el dispositivo por código
+    const device = await Device.query()
+      .where('code', data.deviceCode)
+      .first()
+
+    if (!device) {
+      return response.status(404).json({
+        status: 'error',
+        message: `No se encontró un dispositivo con el código: ${data.deviceCode}`
+      })
+    }
+
+    // Verificar que el environment existe y pertenece al usuario
+    const environment = await Environment.query()
+      .where('id', data.environmentId)
+      .where('id_user', user.id)
+      .first()
+
+    if (!environment) {
+      return response.status(404).json({
+        status: 'error',
+        message: 'El environment especificado no existe o no tienes permisos'
+      })
+    }
+
+    // Verificar si el dispositivo ya está asignado a este environment
+    const existingAssignment = await DeviceEnvir.query()
+      .where('idDevice', device.id)
+      .where('idEnvironment', data.environmentId)
+      .first()
+
+    if (existingAssignment) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'El dispositivo ya está asignado a este environment'
+      })
+    }
+
+    // Crear la asignación en device_envir
+    const deviceEnvir = await DeviceEnvir.create({
+      alias: data.alias,
+      type: data.type,
+      status: data.status || 'activo',
+      idDevice: device.id,
+      idEnvironment: data.environmentId
+    })
+
+    // Cargar las relaciones para la respuesta
+    await deviceEnvir.load('device')
+    await deviceEnvir.load('environment')
+
+    return response.status(201).json({
+      status: 'success',
+      message: 'Dispositivo asignado al environment correctamente',
+      data: {
+        deviceEnvir,
+        device: {
+          id: device.id,
+          name: device.name,
+          code: device.code,
+          apiKey: device.apiKey
+        },
+        environment: {
+          id: environment.id,
+          name: environment.name,
+          color: environment.color
+        }
+      }
+    })
+  } catch (error) {
+    console.error('Error al asignar dispositivo al environment:', error)
+    return response.status(500).json({
+      status: 'error',
+      message: 'Error al procesar la solicitud',
+      error: error.message
+    })
+  }
+}
+
+/**
+ * Obtener environments disponibles para un usuario
+ * Esta función ayuda en el formulario para mostrar las opciones
+ */
+public async getUserEnvironments({ auth, response }: HttpContext) {
+  try {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ message: 'No autenticado' })
+    }
+
+    const environments = await Environment.query()
+      .where('id_user', user.id)
+      .select('id', 'name', 'color')
+
+    return response.ok({
+      status: 'success',
+      data: environments
+    })
+  } catch (error) {
+    console.error('Error al obtener environments del usuario:', error)
+    return response.status(500).json({
+      status: 'error',
+      message: 'Error al obtener environments',
+      error: error.message
+    })
+  }
+}
 }

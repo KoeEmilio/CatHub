@@ -75,14 +75,14 @@ export default class MongoReadingSeeder extends BaseSeeder {
         sensorName: 'Celda de Carga con HX711',
         identifier: 'sen_carga',
         value: 1250.0, // gramos
-        deviceId: '3',
+        deviceId: '2', // Cambiado de 3 a 2 (Comedor grande)
         timestamp: new Date(Date.now() - 1200000) // 20 min atrás
       },
       {
         sensorName: 'Celda de Carga con HX711',
         identifier: 'sen_carga',
         value: 1180.5,
-        deviceId: '3',
+        deviceId: '2', // Cambiado de 3 a 2 (Comedor grande)
         timestamp: new Date()
       },
 
@@ -116,6 +116,36 @@ export default class MongoReadingSeeder extends BaseSeeder {
         value: 0,
         deviceId: '1',
         timestamp: new Date()
+      },
+
+      // Sensores para el dispositivo 3 (Arenero espacioso)
+      {
+        sensorName: 'Sensor Ultrasónico HC-SR04 #3',
+        identifier: 'sen_ultra_03',
+        value: 18.2,
+        deviceId: '3',
+        timestamp: new Date(Date.now() - 2400000) // 40 min atrás
+      },
+      {
+        sensorName: 'Sensor Ultrasónico HC-SR04 #3',
+        identifier: 'sen_ultra_03',
+        value: 17.8,
+        deviceId: '3',
+        timestamp: new Date()
+      },
+      {
+        sensorName: 'Sensor Humedad y Temperatura DHT22',
+        identifier: 'sen_hum_temp',
+        value: 22.1, // Temperatura
+        deviceId: '3',
+        timestamp: new Date(Date.now() - 1800000) // 30 min atrás
+      },
+      {
+        sensorName: 'Sensor de Gas MQ-2',
+        identifier: 'sen_gas',
+        value: 210.3,
+        deviceId: '3',
+        timestamp: new Date(Date.now() - 900000) // 15 min atrás
       }
     ]
 

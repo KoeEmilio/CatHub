@@ -44,9 +44,9 @@ export default class MongoAuditLogSeeder extends BaseSeeder {
         collection: 'devices',
         targetId: '1',
         after: {
-          name: 'CatHub Device #1',
+          name: 'Arenero increible',
           idEnvironment: 1,
-          apiKey: 'device_key_001'
+          apiKey: '550e8400-e29b-41d4-a716-446655440001'
         },
         timestamp: new Date(Date.now() - 79200000) // 22 horas atrás
       },
@@ -56,10 +56,10 @@ export default class MongoAuditLogSeeder extends BaseSeeder {
         collection: 'devices',
         targetId: '1',
         before: {
-          name: 'CatHub Device #1'
+          name: 'Arenero increible'
         },
         after: {
-          name: 'CatHub Arenero Principal'
+          name: 'Arenero increible - Principal'
         },
         timestamp: new Date(Date.now() - 75600000) // 21 horas atrás
       },
@@ -114,6 +114,41 @@ export default class MongoAuditLogSeeder extends BaseSeeder {
           idEnvironment: 1
         },
         timestamp: new Date(Date.now() - 300000) // 5 min atrás
+      },
+      {
+        actor: 'admin@cathub.com',
+        action: 'create',
+        collection: 'devices',
+        targetId: '2',
+        after: {
+          name: 'comedor grande',
+          apiKey: '550e8400-e29b-41d4-a716-446655440002'
+        },
+        timestamp: new Date(Date.now() - 7200000) // 2 horas atrás
+      },
+      {
+        actor: 'admin@cathub.com',
+        action: 'create',
+        collection: 'devices',
+        targetId: '3',
+        after: {
+          name: 'arenero espacioso',
+          apiKey: '550e8400-e29b-41d4-a716-446655440003'
+        },
+        timestamp: new Date(Date.now() - 3600000) // 1 hora atrás
+      },
+      {
+        actor: 'system',
+        action: 'create',
+        collection: 'readings',
+        targetId: 'reading_003',
+        after: {
+          sensorName: 'Celda de Carga con HX711',
+          identifier: 'sen_carga',
+          value: 1250.0,
+          deviceId: '2'
+        },
+        timestamp: new Date(Date.now() - 1200000) // 20 min atrás
       }
     ]
 
