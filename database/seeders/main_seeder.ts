@@ -7,6 +7,8 @@ import DeviceSeeder from './device_seeder.js'
 import DeviceSettingSeeder from './device_setting_seeder.js'
 import DeviceSensorSeeder from './device_sensor_seeder.js'
 import DeviceEnvirSeeder from './device_envir_seeder.js'
+import MongoReadingSeeder from './mongo_reading_seeder.js'
+import MongoAuditLogSeeder from './mongo_audit_log_seeder.js'
 
 export default class MainSeeder extends BaseSeeder {
   private async runSeeder(seeder: typeof BaseSeeder, name: string) {
@@ -24,9 +26,14 @@ export default class MainSeeder extends BaseSeeder {
     await this.runSeeder(SettingSeeder, 'SettingSeeder')
     await this.runSeeder(DeviceSeeder, 'DeviceSeeder')
 
-  await this.runSeeder(DeviceSettingSeeder, 'DeviceSettingSeeder')
-  await this.runSeeder(DeviceSensorSeeder, 'DeviceSensorSeeder')
-  await this.runSeeder(DeviceEnvirSeeder, 'DeviceEnvirSeeder')
+    await this.runSeeder(DeviceSettingSeeder, 'DeviceSettingSeeder')
+    await this.runSeeder(DeviceSensorSeeder, 'DeviceSensorSeeder')
+    await this.runSeeder(DeviceEnvirSeeder, 'DeviceEnvirSeeder')
+
+    // Seeders para MongoDB
+    console.log('\n🍃 Iniciando seeders de MongoDB...')
+    await this.runSeeder(MongoReadingSeeder, 'MongoReadingSeeder')
+    await this.runSeeder(MongoAuditLogSeeder, 'MongoAuditLogSeeder')
 
     console.log('\n✅ Todos los seeders ejecutados correctamente!')
     console.log('📊 Base de datos poblada con datos de ejemplo')

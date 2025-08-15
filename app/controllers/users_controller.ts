@@ -81,7 +81,15 @@ export default class UsersController {
         return response.unauthorized({ message: 'No autenticado' })
       }
 
-      const data = request.only(['fullName', 'email'])
+      const data = request.only(['fullName', 'email', 'password'])
+      
+      // Verificar que se enviaron datos para actualizar
+      if (!data.fullName && !data.email && !data.password) {
+        return response.status(400).json({
+          status: 'error',
+          message: 'No se proporcionaron datos para actualizar'
+        })
+      }
       
       // Si se está actualizando el email, verificar que no esté en uso
       if (data.email && data.email !== user.email) {
@@ -94,8 +102,21 @@ export default class UsersController {
         }
       }
 
-      user.merge(data)
+      // Actualizar campos específicos
+      if (data.fullName) {
+        user.fullName = data.fullName
+      }
+      if (data.email) {
+        user.email = data.email
+      }
+      if (data.password) {
+        user.password = data.password
+      }
+
       await user.save()
+
+      // Recargar el usuario desde la base de datos para asegurar que se obtengan los datos actualizados
+      await user.refresh()
 
       return response.ok({
         status: 'success',
@@ -107,6 +128,7 @@ export default class UsersController {
         }
       })
     } catch (error) {
+      console.error('Error al actualizar usuario:', error)
       return response.status(500).json({
         status: 'error',
         message: 'Error al actualizar usuario',
