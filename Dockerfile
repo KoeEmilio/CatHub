@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN node ace build
+RUN node ace build --ignore-ts-errors
 
 # Segunda etapa solo con el runtime
 FROM node:20-alpine

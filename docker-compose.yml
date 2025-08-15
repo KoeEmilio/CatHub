@@ -37,13 +37,13 @@ services:
   cathub:
     build: .
     ports:
-      - "${API_PORT}:3333"
+      - "${API_PORT}:${API_PORT}"
     restart: unless-stopped
     environment:
       LOG_LEVEL: info
       APP_KEY: 7Otq2phcA_g__DtX_NQLJZRQN7jxIdFa
       TZ: UTC
-      PORT: 3333
+      PORT: ${API_PORT}
       HOST: 0.0.0.0
       NODE_ENV: development
       DB_CONNECTION: pg
