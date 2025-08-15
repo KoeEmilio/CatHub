@@ -34,6 +34,18 @@ new Ignitor(APP_ROOT, { importer: IMPORTER })
     app.booting(async () => {
       await import('#start/env')
     })
+    
+    // Configurar WebSocket después de que la aplicación esté lista
+    app.ready(async () => {
+      const WebSocketService = await import('../app/services/websocket_service.js')
+      const httpServer = await app.container.make('server')
+      const nodeServer = httpServer.getNodeServer()
+      if (nodeServer) {
+        WebSocketService.default.initialize(nodeServer)
+        console.log('🚀 WebSocket server initialized')
+      }
+    })
+    
     app.listen('SIGTERM', () => app.terminate())
     app.listenIf(app.managedByPm2, 'SIGINT', () => app.terminate())
   })

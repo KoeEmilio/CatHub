@@ -17,6 +17,7 @@ const DevicesController = () => import('../app/controllers/devices_controller.js
 const ReadingsController = () => import('../app/controllers/readings_controller.js')
 const DeviceConfigController = () => import('../app/controllers/device_config_controller.js')
 const DeviceStatusController = () => import('../app/controllers/device_status_controller.js')
+const StatusesController = () => import('../app/controllers/statuses_controller.js')
 
 router.get('/', async () => {
   return {
@@ -91,3 +92,40 @@ router.group(() => {
   router.post('/start-filling/:deviceEnvirId', [DeviceStatusController, 'startFilling'])
   router.post('/mark-empty/:deviceEnvirId', [DeviceStatusController, 'markEmpty'])
 }).prefix('/api/device-control').use(middleware.auth())
+
+// Rutas para el manejo de estados específicos de dispositivos
+router.group(() => {
+  // Obtener estado
+  router.get('/:id', [StatusesController, 'getStatus'])
+  router.get('/environment/:environmentId', [StatusesController, 'getEnvironmentStatus'])
+  
+  // Cambiar estados específicos
+  router.put('/:id/sin-comida', [StatusesController, 'setSinComida'])
+  router.put('/:id/sin-arena', [StatusesController, 'setSinArena'])
+  router.put('/:id/sin-agua', [StatusesController, 'setSinAgua'])
+  router.put('/:id/abastecido', [StatusesController, 'setAbastecido'])
+  router.put('/:id/lleno', [StatusesController, 'setLleno'])
+  router.put('/:id/sucio', [StatusesController, 'setSucio'])
+  
+  // Cambiar estado genérico
+  router.put('/:id', [StatusesController, 'updateStatus'])
+  
+  // Rutas para intervalos de areneros
+  router.put('/:id/intervalo', [StatusesController, 'setIntervalo'])
+  router.get('/:id/intervalo', [StatusesController, 'getIntervalo'])
+  router.get('/areneros/all', [StatusesController, 'getAreneros'])
+  
+  // Rutas para limpieza automática
+  router.post('/:id/start-cleaning', [StatusesController, 'startAutomaticCleaning'])
+  router.post('/:id/complete-cleaning', [StatusesController, 'completeAutomaticCleaning'])
+  router.post('/:id/cleaning-reminder', [StatusesController, 'sendCleaningReminder'])
+}).prefix('/api/device-status').use(middleware.auth())
+
+// Ruta simple para información del WebSocket
+router.get('/api/websocket/info', async ({ response }) => {
+  return response.ok({
+    message: 'WebSocket server running',
+    serverTime: new Date().toISOString(),
+    status: 'active'
+  })
+})
