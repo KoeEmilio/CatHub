@@ -1,8 +1,9 @@
-import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
+import { BaseModel, column, belongsTo, hasOne } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import type { BelongsTo, HasOne } from '@adonisjs/lucid/types/relations'
 import Device from './device.js'
 import Sensor from './sensor.js'
+import DeviceSensorSetting from './device_sensor_setting.js'
 
 export default class DeviceSensor extends BaseModel {
   public static table = 'device_sensors'
@@ -31,4 +32,9 @@ export default class DeviceSensor extends BaseModel {
     foreignKey: 'idSensor',
   })
   declare sensor: BelongsTo<typeof Sensor>
+
+  @hasOne(() => DeviceSensorSetting, {
+    foreignKey: 'idDeviceSensor',
+  })
+  declare setting: HasOne<typeof DeviceSensorSetting>
 }

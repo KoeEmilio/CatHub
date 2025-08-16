@@ -2,9 +2,9 @@ import { BaseSeeder } from '@adonisjs/lucid/seeders'
 import UserSeeder from './user_seeder.js'
 import EnvironmentSeeder from './environment_seeder.js'
 import SensorSeeder from './sensor_seeder.js'
-import SettingSeeder from './setting_seeder.js'
 import DeviceSeeder from './device_seeder.js'
-import DeviceSettingSeeder from './device_setting_seeder.js'
+import CodeSeeder from './code_seeder.js'
+import ActuatorSeeder from './actuator_seeder.js'
 import DeviceSensorSeeder from './device_sensor_seeder.js'
 import DeviceEnvirSeeder from './device_envir_seeder.js'
 import MongoReadingSeeder from './mongo_reading_seeder.js'
@@ -13,7 +13,12 @@ import MongoAuditLogSeeder from './mongo_audit_log_seeder.js'
 export default class MainSeeder extends BaseSeeder {
   private async runSeeder(seeder: typeof BaseSeeder, name: string) {
     console.log(`🌱 Ejecutando ${name}...`)
-    await new seeder(this.client).run()
+    try {
+      await new seeder(this.client).run()
+      console.log(`✅ ${name} completado`)
+    } catch (error) {
+      console.log(`❌ Error en ${name}:`, error.message)
+    }
   }
 
   async run() {
@@ -23,10 +28,12 @@ export default class MainSeeder extends BaseSeeder {
     await this.runSeeder(UserSeeder, 'UserSeeder')
     await this.runSeeder(EnvironmentSeeder, 'EnvironmentSeeder')
     await this.runSeeder(SensorSeeder, 'SensorSeeder')
-    await this.runSeeder(SettingSeeder, 'SettingSeeder')
+    await this.runSeeder(ActuatorSeeder, 'ActuatorSeeder')
+    
+    // Crear devices primero, luego códigos
     await this.runSeeder(DeviceSeeder, 'DeviceSeeder')
+    await this.runSeeder(CodeSeeder, 'CodeSeeder')
 
-    await this.runSeeder(DeviceSettingSeeder, 'DeviceSettingSeeder')
     await this.runSeeder(DeviceSensorSeeder, 'DeviceSensorSeeder')
     await this.runSeeder(DeviceEnvirSeeder, 'DeviceEnvirSeeder')
 

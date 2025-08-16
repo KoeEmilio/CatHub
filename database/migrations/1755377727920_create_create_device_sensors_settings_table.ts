@@ -1,14 +1,13 @@
 import { BaseSchema } from '@adonisjs/lucid/schema'
 
 export default class extends BaseSchema {
-  protected tableName = 'settings'
+  protected tableName = 'device_sensors_settings'
 
   async up() {
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
-      table.string('config_key').notNullable().unique()
-      table.text('config_value').notNullable()
-      table.string('data_type').notNullable()
+      table.integer('id_device_sensor').unsigned().references('id').inTable('device_sensors').onDelete('CASCADE').comment('ID de la relación device-sensor')
+      table.decimal('comida', 8, 2).nullable().comment('Cantidad de comida en gramos')
 
       table.timestamp('created_at')
       table.timestamp('updated_at')

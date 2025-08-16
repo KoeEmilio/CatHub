@@ -9,11 +9,7 @@ export interface ReadingDocument extends Document {
 }
 
 const readingSchema = new Schema({
-  sensorName: {
-    type: String,
-    required: true,
-    trim: true
-  },
+  
   identifier: {
     type: String,
     required: true,
@@ -29,6 +25,11 @@ const readingSchema = new Schema({
     default: Date.now
   },
   deviceId: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  sensorId: {
     type: String,
     required: true,
     trim: true

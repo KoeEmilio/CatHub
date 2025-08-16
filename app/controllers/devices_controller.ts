@@ -2,6 +2,8 @@ import { HttpContext } from '@adonisjs/core/http'
 import Device from '../models/device.js'
 import Environment from '../models/environment.js'
 import DeviceEnvir from '../models/device_envir.js'
+import Code from '../models/code.js'
+import ActuatorDeviceSetting from '../models/actuator_device_setting.js'
 import { randomUUID } from 'node:crypto'
 
 export default class DevicesController {
@@ -332,7 +334,7 @@ public async getAllDevices({ auth, response }: HttpContext) {
 
 /**
  * Asignar un dispositivo a un environment
- * Ahora el código se ingresa y valida según el tipo de dispositivo
+ * Ahora el código se guarda en la tabla codes separada
  */
 public async assignToEnvironment({ request, response, auth }: HttpContext) {
   try {
@@ -359,8 +361,8 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Validar formato del código
-    const codeValidation = DeviceEnvir.validateDeviceCode(data.deviceCode, data.type)
+    // Validar formato del código usando el modelo Code
+    const codeValidation = Code.validateDeviceCode(data.deviceCode)
     if (!codeValidation.isValid) {
       return response.status(400).json({
         status: 'error',
@@ -381,8 +383,8 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Verificar si el código ya existe
-    const existingCode = await DeviceEnvir.query()
+    // Verificar si el código ya existe en la tabla codes
+    const existingCode = await Code.query()
       .where('code', data.deviceCode)
       .first()
 
@@ -393,17 +395,22 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Crear un nuevo dispositivo (asumiendo que cada asignación es un nuevo dispositivo)
+    // Crear un nuevo dispositivo
     const device = await Device.create({
       name: data.alias, // Usar el alias como nombre del dispositivo
       apiKey: `device_${randomUUID()}` // Generar API key único
     })
 
-    // Crear la asignación en device_envir
+    // Crear el código del dispositivo en la tabla codes
+    await Code.create({
+      code: data.deviceCode,
+      idDevice: device.id
+    })
+
+    // Crear la asignación en device_envir (sin código, comida, ni intervalo)
     const deviceEnvir = await DeviceEnvir.create({
       alias: data.alias,
       type: data.type,
-      code: data.deviceCode,
       status: data.status || 'abastecido',
       idDevice: device.id,
       idEnvironment: data.environmentId
@@ -412,6 +419,7 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
     // Cargar las relaciones para la respuesta
     await deviceEnvir.load('device')
     await deviceEnvir.load('environment')
+    await device.load('code')
 
     return response.status(201).json({
       status: 'success',
@@ -421,7 +429,8 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
         device: {
           id: device.id,
           name: device.name,
-          apiKey: device.apiKey
+          apiKey: device.apiKey,
+          code: device.code?.code || null
         },
         environment: {
           id: environment.id,
@@ -430,7 +439,7 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
         }
       }
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error al asignar dispositivo al environment:', error)
     return response.status(500).json({
       status: 'error',
@@ -456,7 +465,12 @@ public async getDeviceEnvironment({ params, auth, response }: HttpContext) {
     // Buscar el registro device_envir con sus relaciones
     const deviceEnvir = await DeviceEnvir.query()
       .where('id', deviceEnvirId)
-      .preload('device')
+      .preload('device', (deviceQuery) => {
+        deviceQuery.preload('code')
+        deviceQuery.preload('deviceSensors', (sensorQuery) => {
+          sensorQuery.preload('setting')
+        })
+      })
       .preload('environment')
       .first()
 
@@ -475,6 +489,16 @@ public async getDeviceEnvironment({ params, auth, response }: HttpContext) {
       })
     }
 
+    // Obtener configuraciones del device (comida e intervalo)
+    const deviceSensor = deviceEnvir.device.deviceSensors[0]
+    const comida = deviceSensor?.setting?.comida || null
+
+    // Obtener configuración de intervalo desde actuators_device_settings
+    const actuatorSetting = await ActuatorDeviceSetting.query()
+      .where('idActuatorSetting', 1) // ID base para intervalos
+      .first()
+    const intervalo = actuatorSetting?.intervalo || null
+
     return response.ok({
       status: 'success',
       data: {
@@ -482,9 +506,9 @@ public async getDeviceEnvironment({ params, auth, response }: HttpContext) {
         alias: deviceEnvir.alias,
         type: deviceEnvir.type,
         status: deviceEnvir.status,
-        intervalo: deviceEnvir.intervalo,
-        comida: deviceEnvir.comida,
-        code: deviceEnvir.code, // Ahora el código está en device_envir
+        intervalo: intervalo,
+        comida: comida,
+        code: deviceEnvir.device.code?.code || null,
         device: {
           id: deviceEnvir.device.id,
           name: deviceEnvir.device.name,
@@ -580,7 +604,7 @@ public async updateDeviceEnvironment({ params, request, response, auth }: HttpCo
     // Validar código si se proporciona
     if (data.code) {
       // Validar formato del código
-      const codeValidation = DeviceEnvir.validateDeviceCode(data.code, data.type || deviceEnvir.type)
+      const codeValidation = Code.validateDeviceCode(data.code)
       if (!codeValidation.isValid) {
         return response.status(400).json({
           status: 'error',
@@ -589,9 +613,9 @@ public async updateDeviceEnvironment({ params, request, response, auth }: HttpCo
       }
 
       // Verificar si el código ya existe (excepto el actual)
-      const existingCode = await DeviceEnvir.query()
+      const existingCode = await Code.query()
         .where('code', data.code)
-        .where('id', '!=', deviceEnvirId)
+        .where('idDevice', '!=', deviceEnvir.idDevice)
         .first()
 
       if (existingCode) {
@@ -691,7 +715,9 @@ public async deleteDeviceEnvironment({ params, auth, response }: HttpContext) {
     // Buscar el registro device_envir con sus relaciones
     const deviceEnvir = await DeviceEnvir.query()
       .where('id', deviceEnvirId)
-      .preload('device')
+      .preload('device', (deviceQuery) => {
+        deviceQuery.preload('code')
+      })
       .preload('environment')
       .first()
 
@@ -716,7 +742,7 @@ public async deleteDeviceEnvironment({ params, auth, response }: HttpContext) {
       alias: deviceEnvir.alias,
       type: deviceEnvir.type,
       status: deviceEnvir.status,
-      code: deviceEnvir.code, // Ahora el código está en device_envir
+      code: deviceEnvir.device.code?.code || null,
       device: {
         id: deviceEnvir.device.id,
         name: deviceEnvir.device.name

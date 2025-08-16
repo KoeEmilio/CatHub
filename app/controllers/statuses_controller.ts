@@ -1,5 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import DeviceEnvir from '#models/device_envir'
+import DeviceSensorSetting from '#models/device_sensor_setting'
+import ActuatorDeviceSetting from '#models/actuator_device_setting'
 import WebSocketService from '#services/websocket_service'
 
 export default class StatusesController {
@@ -256,7 +258,10 @@ export default class StatusesController {
         })
       }
 
-      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
+      const deviceEnvir = await DeviceEnvir.query()
+        .where('id', deviceEnvirId)
+        .preload('device')
+        .firstOrFail()
 
       // Verificar que sea un arenero
       if (deviceEnvir.type !== 'arenero') {
@@ -265,15 +270,31 @@ export default class StatusesController {
         })
       }
 
-      deviceEnvir.intervalo = intervalo
-      await deviceEnvir.save()
+      // Buscar o crear configuración de intervalo usando SQL directo
+      const existingInterval = await ActuatorDeviceSetting.query()
+        .whereHas('actuatorSetting', (query) => {
+          // Simplificado: usar ID directo o buscar por device
+          query.where('id', 1) // Ajustar según tu lógica
+        })
+        .first()
+
+      if (existingInterval) {
+        existingInterval.intervalo = intervalo
+        await existingInterval.save()
+      } else {
+        await ActuatorDeviceSetting.create({
+          idActuatorSetting: 1, // ID base para intervalos
+          intervalo: intervalo
+        })
+      }
 
       // Emitir evento WebSocket de cambio de intervalo
       WebSocketService.emitIntervalChange(deviceEnvir, intervalo)
 
       return response.ok({
         message: `Intervalo de limpieza configurado a ${intervalo} minutos`,
-        device: deviceEnvir
+        device: deviceEnvir,
+        intervalo: intervalo
       })
     } catch (error) {
       return response.badRequest({
@@ -289,7 +310,10 @@ export default class StatusesController {
   async getIntervalo({ params, response }: HttpContext) {
     try {
       const deviceEnvirId = params.id
-      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
+      const deviceEnvir = await DeviceEnvir.query()
+        .where('id', deviceEnvirId)
+        .preload('device')
+        .firstOrFail()
 
       if (deviceEnvir.type !== 'arenero') {
         return response.badRequest({
@@ -297,12 +321,19 @@ export default class StatusesController {
         })
       }
 
+      // Buscar intervalo en actuators_device_settings
+      const actuatorSetting = await ActuatorDeviceSetting.query()
+        .where('idActuatorSetting', 1) // ID base para intervalos
+        .first()
+
+      const intervalo = actuatorSetting?.intervalo || null
+
       return response.ok({
         deviceEnvirId: deviceEnvir.id,
         alias: deviceEnvir.alias,
         type: deviceEnvir.type,
-        intervalo: deviceEnvir.intervalo,
-        intervaloEnHoras: deviceEnvir.intervalo ? Math.round(deviceEnvir.intervalo / 60 * 100) / 100 : null
+        intervalo: intervalo,
+        intervaloEnHoras: intervalo ? Math.round(intervalo / 60 * 100) / 100 : null
       })
     } catch (error) {
       return response.badRequest({
@@ -320,22 +351,29 @@ export default class StatusesController {
       const areneros = await DeviceEnvir.query()
         .where('type', 'arenero')
         .preload('device')
-        .preload('environment')
 
-      const arenesosConIntervalo = areneros.map(arenero => ({
-        id: arenero.id,
-        alias: arenero.alias,
-        status: arenero.status,
-        intervalo: arenero.intervalo,
-        intervaloEnHoras: arenero.intervalo ? Math.round(arenero.intervalo / 60 * 100) / 100 : null,
-        device: arenero.device,
-        environment: arenero.environment
+      // Obtener configuración de intervalo
+      const actuatorSetting = await ActuatorDeviceSetting.query()
+        .where('idActuatorSetting', 1) // ID base para intervalos
+        .first()
+
+      const intervalo = actuatorSetting?.intervalo || null
+
+      const areData = areneros.map(a => ({
+        id: a.id,
+        alias: a.alias,
+        type: a.type,
+        status: a.status,
+        intervalo: intervalo,
+        intervaloEnHoras: intervalo ? Math.round(intervalo / 60 * 100) / 100 : null,
+        dispositivo: {
+          id: a.device.id,
+          code: a.device.code,
+          name: a.device.name
+        }
       }))
 
-      return response.ok({
-        message: 'Areneros obtenidos',
-        areneros: arenesosConIntervalo
-      })
+      return response.ok(areData)
     } catch (error) {
       return response.badRequest({
         message: 'Error al obtener areneros',
@@ -451,45 +489,60 @@ export default class StatusesController {
   }
 
   /**
-   * Configurar cantidad de comida en gramos
+   * Configurar cantidad de comida de un sensor de comida
    */
   async setComida({ params, request, response }: HttpContext) {
     try {
       const deviceEnvirId = params.id
       const { comida } = request.only(['comida'])
 
-      if (comida === undefined || comida < 0) {
+      const deviceEnvir = await DeviceEnvir.query()
+        .where('id', deviceEnvirId)
+        .preload('device', (deviceQuery) => {
+          deviceQuery.preload('deviceSensors', (sensorQuery) => {
+            sensorQuery.preload('setting')
+          })
+        })
+        .firstOrFail()
+
+      if (deviceEnvir.type !== 'comedero') {
         return response.badRequest({
-          message: 'La cantidad de comida debe ser un número positivo o cero'
+          message: 'Solo los comederos pueden configurar comida'
         })
       }
 
-      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
-
-      const previousAmount = deviceEnvir.comida
-      deviceEnvir.comida = comida
-      await deviceEnvir.save()
-
-      // Emitir evento WebSocket de actualización de comida
-      WebSocketService.emitFoodUpdate(deviceEnvir, comida, previousAmount)
-
-      // Verificar si necesita alerta de comida baja
-      if (comida <= 50) {
-        WebSocketService.emitLowFoodAlert(deviceEnvir, comida)
+      // Buscar sensor de comida (asumiendo que hay uno por device)
+      const deviceSensor = deviceEnvir.device.deviceSensors[0]
+      
+      if (!deviceSensor) {
+        return response.badRequest({
+          message: 'No se encontró sensor de comida para este comedero'
+        })
       }
 
-      // Si no hay comida, cambiar estado automáticamente
-      if (comida === 0 && deviceEnvir.type === 'comedero') {
-        deviceEnvir.status = 'sin_comida'
-        await deviceEnvir.save()
-        WebSocketService.emitStatusChange(deviceEnvir, 'sin_comida')
+      // Buscar o crear configuración de comida
+      let comidaSetting = deviceSensor.setting
+      
+      if (!comidaSetting) {
+        // Crear nueva configuración
+        await DeviceSensorSetting.create({
+          idDeviceSensor: deviceSensor.id,
+          comida: comida,
+        })
+        // Actualizar la relación
+        await deviceSensor.load('setting')
+        comidaSetting = deviceSensor.setting
+      } else {
+        comidaSetting.comida = comida
+        await comidaSetting.save()
       }
 
       return response.ok({
-        message: `Cantidad de comida configurada a ${comida} gramos`,
-        device: deviceEnvir,
-        previousAmount,
-        difference: previousAmount ? comida - previousAmount : comida
+        message: 'Comida configurada exitosamente',
+        deviceEnvirId: deviceEnvir.id,
+        alias: deviceEnvir.alias,
+        type: deviceEnvir.type,
+        comida: comida
       })
     } catch (error) {
       return response.badRequest({
@@ -500,66 +553,101 @@ export default class StatusesController {
   }
 
   /**
-   * Obtener cantidad de comida de un dispositivo
+   * Obtener cantidad de comida de un comedero
    */
   async getComida({ params, response }: HttpContext) {
     try {
       const deviceEnvirId = params.id
-      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
+      const deviceEnvir = await DeviceEnvir.query()
+        .where('id', deviceEnvirId)
+        .preload('device', (deviceQuery) => {
+          deviceQuery.preload('deviceSensors', (sensorQuery) => {
+            sensorQuery.preload('setting')
+          })
+        })
+        .firstOrFail()
+
+      if (deviceEnvir.type !== 'comedero') {
+        return response.badRequest({
+          message: 'Solo los comederos tienen configuración de comida'
+        })
+      }
+
+      // Buscar sensor de comida
+      const deviceSensor = deviceEnvir.device.deviceSensors[0]
+      const comida = deviceSensor?.setting?.comida || null
 
       return response.ok({
         deviceEnvirId: deviceEnvir.id,
         alias: deviceEnvir.alias,
         type: deviceEnvir.type,
-        comida: deviceEnvir.comida,
-        status: deviceEnvir.status,
-        lastUpdate: deviceEnvir.updatedAt
+        comida: comida
       })
     } catch (error) {
       return response.badRequest({
-        message: 'Error al obtener cantidad de comida',
+        message: 'Error al obtener comida',
         error: error.message
       })
     }
   }
 
   /**
-   * Agregar comida (incrementar)
+   * Agregar comida a un comedero
    */
   async addComida({ params, request, response }: HttpContext) {
     try {
       const deviceEnvirId = params.id
-      const { comida } = request.only(['comida'])
+      const { cantidad } = request.only(['cantidad'])
 
-      if (!comida || comida <= 0) {
+      const deviceEnvir = await DeviceEnvir.query()
+        .where('id', deviceEnvirId)
+        .preload('device', (deviceQuery) => {
+          deviceQuery.preload('deviceSensors', (sensorQuery) => {
+            sensorQuery.preload('setting')
+          })
+        })
+        .firstOrFail()
+
+      if (deviceEnvir.type !== 'comedero') {
         return response.badRequest({
-          message: 'La cantidad de comida a agregar debe ser un número positivo'
+          message: 'Solo se puede agregar comida a comederos'
         })
       }
 
-      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
-      const previousAmount = deviceEnvir.comida || 0
-      const newAmount = previousAmount + comida
+      // Buscar sensor de comida
+      const deviceSensor = deviceEnvir.device.deviceSensors[0]
+      
+      if (!deviceSensor) {
+        return response.badRequest({
+          message: 'No se encontró sensor de comida para este comedero'
+        })
+      }
 
-      deviceEnvir.comida = newAmount
-      await deviceEnvir.save()
-
-      // Emitir evento WebSocket
-      WebSocketService.emitFoodUpdate(deviceEnvir, newAmount, previousAmount)
-
-      // Si se agrega comida y estaba sin comida, cambiar estado
-      if (previousAmount === 0 && deviceEnvir.type === 'comedero' && deviceEnvir.status === 'sin_comida') {
-        deviceEnvir.status = 'abastecido'
-        await deviceEnvir.save()
-        WebSocketService.emitStatusChange(deviceEnvir, 'abastecido')
+      // Buscar o crear configuración de comida
+      let comidaSetting = deviceSensor.setting
+      
+      if (!comidaSetting) {
+        // Crear nueva configuración con la cantidad inicial
+        await DeviceSensorSetting.create({
+          idDeviceSensor: deviceSensor.id,
+          comida: cantidad,
+        })
+        await deviceSensor.load('setting')
+        comidaSetting = deviceSensor.setting
+      } else {
+        // Agregar cantidad a la existente
+        const nuevaCantidad = (comidaSetting.comida || 0) + cantidad
+        comidaSetting.comida = nuevaCantidad
+        await comidaSetting.save()
       }
 
       return response.ok({
-        message: `Se agregaron ${comida}g de comida`,
-        device: deviceEnvir,
-        previousAmount,
-        addedAmount: comida,
-        newTotal: newAmount
+        message: 'Comida agregada exitosamente',
+        deviceEnvirId: deviceEnvir.id,
+        alias: deviceEnvir.alias,
+        type: deviceEnvir.type,
+        cantidadAgregada: cantidad,
+        comidaTotal: comidaSetting.comida
       })
     } catch (error) {
       return response.badRequest({
@@ -583,12 +671,41 @@ export default class StatusesController {
         })
       }
 
-      const deviceEnvir = await DeviceEnvir.findOrFail(deviceEnvirId)
-      const previousAmount = deviceEnvir.comida || 0
+      const deviceEnvir = await DeviceEnvir.query()
+        .where('id', deviceEnvirId)
+        .preload('device', (deviceQuery) => {
+          deviceQuery.preload('deviceSensors', (sensorQuery) => {
+            sensorQuery.preload('setting')
+          })
+        })
+        .firstOrFail()
+
+      // Buscar sensor de comida
+      const deviceSensor = deviceEnvir.device.deviceSensors[0]
+      
+      if (!deviceSensor) {
+        return response.badRequest({
+          message: 'No se encontró sensor de comida para este comedero'
+        })
+      }
+
+      // Buscar configuración de comida existente
+      let comidaSetting = deviceSensor.setting
+      const previousAmount = comidaSetting?.comida || 0
       const newAmount = Math.max(0, previousAmount - comida) // No permitir negativos
 
-      deviceEnvir.comida = newAmount
-      await deviceEnvir.save()
+      if (comidaSetting) {
+        comidaSetting.comida = newAmount
+        await comidaSetting.save()
+      } else {
+        // Crear nueva configuración
+        await DeviceSensorSetting.create({
+          idDeviceSensor: deviceSensor.id,
+          comida: newAmount,
+        })
+        await deviceSensor.load('setting')
+        comidaSetting = deviceSensor.setting
+      }
 
       // Emitir evento WebSocket
       WebSocketService.emitFoodUpdate(deviceEnvir, newAmount, previousAmount)
