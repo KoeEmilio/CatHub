@@ -1,0 +1,24 @@
+name: Trabajar directo en el servidor
+
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: cathub
+
+    steps:
+      - name: Try SSH Deploy (Host 1)
+        uses: appleboy/ssh-action@v1.0.3
+        continue-on-error: true
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          key: ${{ secrets.KEY }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd Desktop/CatHub
+            sudo git pull origin
+            sudo docker restart cathub-cathub-1
