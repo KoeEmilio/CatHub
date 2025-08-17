@@ -61,7 +61,7 @@ services:
     restart: always
     ports:
       - "${SOCKET_PORT}:${SOCKET_PORT}"        # e.g. 1883 (si quieres mantenerlo)
-      - "${SOCKET_PORT_TLS}:${SOCKET_PORT_TLS}"# e.g. 8883 (TLS MQTT)
+      - "${SOCKET_PORT_TLS}:${SOCKET_PORT_TLS}" # e.g. 8883 (TLS MQTT)
       - "${DASHBOARD_PORT}:${DASHBOARD_PORT}"  # dashboard (ej. 18083)
       - "8884:8884"                            # WSS (WebSocket TLS)
     environment:
