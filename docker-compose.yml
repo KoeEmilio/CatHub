@@ -34,26 +34,72 @@ services:
     networks:
       - igmar-net
 
+  # mqtt:
+  #   image: emqx:5.8.3
+  #   container_name: mqtt-broker
+  #   restart: always
+  #   ports:
+  #     - "${SOCKET_PORT}:${SOCKET_PORT}"
+  #     - "${SOCKET_PORT_TLS}:${SOCKET_PORT_TLS}"
+  #     - "${DASHBOARD_PORT}:${DASHBOARD_PORT}"
+  #   environment:
+  #     - EMQX_NODE__NAME=${EMQX_NODE__NAME}
+  #     - EMQX_NODE__COOKIE=${EMQX_NODE__COOKIE}
+  #     - EMQX_LOG__LEVEL=${EMQX_LOG__LEVEL}
+  #     - EMQX_DASHBOARD_DEFAULT_USER__USERNAME=${EMQX_DASHBOARD_DEFAULT_USER__USERNAME}
+  #     - EMQX_DASHBOARD_DEFAULT_USER__PASSWORD=${EMQX_DASHBOARD_DEFAULT_USER__PASSWORD}
+  #   volumes:
+  #     - emqx-data:/opt/emqx/data
+  #     - emqx-etc:/opt/emqx/etc
+  #     - emqx-log:/opt/emqx/log
+  #   networks:
+  #     - igmar-net
+
   mqtt:
     image: emqx:5.8.3
     container_name: mqtt-broker
     restart: always
     ports:
-      - "${SOCKET_PORT}:${SOCKET_PORT}"
-      - "${SOCKET_PORT_TLS}:${SOCKET_PORT_TLS}"
-      - "${DASHBOARD_PORT}:${DASHBOARD_PORT}"
+      - "${SOCKET_PORT}:${SOCKET_PORT}"      # normalmente 1883 (si lo necesitas)
+      - "${SOCKET_PORT_TLS}:${SOCKET_PORT_TLS}"  # normalmente 8883 (TLS MQTT)
+      - "${DASHBOARD_PORT}:${DASHBOARD_PORT}"    # dashboard (ej. 18083)
+      - "8884:8884"                         # WSS (WebSocket TLS) - expuesto en 8884
     environment:
       - EMQX_NODE__NAME=${EMQX_NODE__NAME}
       - EMQX_NODE__COOKIE=${EMQX_NODE__COOKIE}
       - EMQX_LOG__LEVEL=${EMQX_LOG__LEVEL}
       - EMQX_DASHBOARD_DEFAULT_USER__USERNAME=${EMQX_DASHBOARD_DEFAULT_USER__USERNAME}
       - EMQX_DASHBOARD_DEFAULT_USER__PASSWORD=${EMQX_DASHBOARD_DEFAULT_USER__PASSWORD}
+
+      # --- Listeners TLS / WSS (forzamos que usen los archivos abajo montados) ---
+      - EMQX_LISTENERS__SSL__EXTERNAL__ENABLED=true
+      - EMQX_LISTENERS__SSL__EXTERNAL__PORT=8883
+      - EMQX_LISTENERS__SSL__EXTERNAL__CERTFILE=/opt/emqx/etc/certs/server.crt
+      - EMQX_LISTENERS__SSL__EXTERNAL__KEYFILE=/opt/emqx/etc/certs/server.key
+
+      - EMQX_LISTENERS__WSS__EXTERNAL__ENABLED=true
+      - EMQX_LISTENERS__WSS__EXTERNAL__PORT=8884
+      - EMQX_LISTENERS__WSS__EXTERNAL__CERTFILE=/opt/emqx/etc/certs/server.crt
+      - EMQX_LISTENERS__WSS__EXTERNAL__KEYFILE=/opt/emqx/etc/certs/server.key
+
+      # --- Desactivar listeners no deseados (ajusta si quieres conservar plain TCP/WS) ---
+      - EMQX_LISTENERS__TCP__EXTERNAL__ENABLED=false
+      - EMQX_LISTENERS__WS__EXTERNAL__ENABLED=false
     volumes:
       - emqx-data:/opt/emqx/data
       - emqx-etc:/opt/emqx/etc
       - emqx-log:/opt/emqx/log
+
+      # Montar certificados Let's Encrypt directamente (live son symlinks a archive)
+      - /etc/letsencrypt/live/atenasoficial.com/fullchain.pem:/opt/emqx/etc/certs/server.crt:ro
+      - /etc/letsencrypt/live/atenasoficial.com/privkey.pem:/opt/emqx/etc/certs/server.key:ro
+
+      # (opcional) si quieres exponer chain/ca explícito:
+      # - /etc/letsencrypt/live/www.atenasoficial.com/chain.pem:/opt/emqx/etc/certs/ca.crt:ro
+
     networks:
       - igmar-net
+
 
   cathub:
     build: .
