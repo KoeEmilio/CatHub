@@ -57,8 +57,8 @@ services:
 
   cathub:
     build: .
-    ports:
-      - "${API_PORT}:${API_PORT}"
+    # ports:
+    #   - "${API_PORT}:${API_PORT}"
     restart: unless-stopped
     environment:
       LOG_LEVEL: info
@@ -92,3 +92,6 @@ volumes:
   mongo-data:
   postgres-data:
   mqtt-data:
+  emqx-data:
+  emqx-etc:
+  emqx-log:
