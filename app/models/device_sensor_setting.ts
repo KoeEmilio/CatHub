@@ -4,7 +4,7 @@ import type { BelongsTo } from '@adonisjs/lucid/types/relations'
 import DeviceSensor from './device_sensor.js'
 
 export default class DeviceSensorSetting extends BaseModel {
-  static table = 'device_sensors_settings'
+  static table = 'device_sensor_settings'
 
   @column({ isPrimary: true })
   declare id: number

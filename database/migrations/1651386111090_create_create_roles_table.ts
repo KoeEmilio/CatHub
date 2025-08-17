@@ -4,6 +4,9 @@ export default class extends BaseSchema {
   protected tableName = 'roles'
 
   async up() {
+    // Drop incorrect table if exists
+    this.schema.dropTableIfExists('rols')
+    
     this.schema.createTable(this.tableName, (table) => {
       table.increments('id')
       table.string('name').notNullable().unique()

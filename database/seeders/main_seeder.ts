@@ -30,12 +30,12 @@ export default class MainSeeder extends BaseSeeder {
     await this.runSeeder(SensorSeeder, 'SensorSeeder')
     await this.runSeeder(ActuatorSeeder, 'ActuatorSeeder')
     
-    // Crear devices primero, luego códigos
+    // Crear devices primero, luego device_environments, y finalmente códigos
     await this.runSeeder(DeviceSeeder, 'DeviceSeeder')
+    await this.runSeeder(DeviceEnvirSeeder, 'DeviceEnvirSeeder')
     await this.runSeeder(CodeSeeder, 'CodeSeeder')
 
     await this.runSeeder(DeviceSensorSeeder, 'DeviceSensorSeeder')
-    await this.runSeeder(DeviceEnvirSeeder, 'DeviceEnvirSeeder')
 
     // Seeders para MongoDB
     console.log('\n🍃 Iniciando seeders de MongoDB...')

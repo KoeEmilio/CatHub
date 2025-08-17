@@ -10,9 +10,6 @@ export default class Sensor extends BaseModel {
   @column()
   declare tipoSensor: string
 
-  @column()
-  declare nomenclatura: string
-
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

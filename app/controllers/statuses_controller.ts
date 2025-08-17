@@ -272,7 +272,7 @@ export default class StatusesController {
 
       // Buscar o crear configuración de intervalo usando SQL directo
       const existingInterval = await ActuatorDeviceSetting.query()
-        .whereHas('actuatorSetting', (query) => {
+        .whereHas('actuatorDevice', (query) => {
           // Simplificado: usar ID directo o buscar por device
           query.where('id', 1) // Ajustar según tu lógica
         })

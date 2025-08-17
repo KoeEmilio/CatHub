@@ -2,6 +2,8 @@ import { HttpContext } from '@adonisjs/core/http'
 import Reading from '../models/readings.js'
 import Device from '../models/device.js'
 import DeviceEnvir from '../models/device_envir.js'
+import DeviceSensor from '../models/device_sensor.js'
+import Sensor from '../models/sensor.js'
 
 export default class ReadingsController {
   /**
@@ -260,6 +262,148 @@ export default class ReadingsController {
       return response.status(500).json({
         status: 'error',
         message: 'Error al obtener estadísticas',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * Obtener lecturas de sensores específicos de un dispositivo
+   * GET /devices/:deviceId/sensor-readings
+   */
+  public async getDeviceSensorReadings({ params, request, auth, response }: HttpContext) {
+    try {
+      const user = auth.user
+      if (!user) {
+        return response.unauthorized({ message: 'No autenticado' })
+      }
+
+      const { deviceId } = params
+      const { page = 1, limit = 50, sensorId, startDate, endDate } = request.qs()
+
+      // Verificar que el dispositivo pertenece al usuario
+      const device = await Device.query()
+        .where('id', deviceId)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment', (envQuery) => {
+            envQuery.where('id_user', user.id)
+          })
+        })
+        .preload('sensors') // Cargar los sensores asociados al device
+        .first()
+
+      if (!device) {
+        return response.status(404).json({
+          status: 'error',
+          message: 'Dispositivo no encontrado'
+        })
+      }
+
+      // Verificar permisos del usuario
+      const hasAccess = device.deviceEnvirs.some(deviceEnvir => 
+        deviceEnvir.environment && deviceEnvir.environment.idUser === user.id
+      )
+
+      if (!hasAccess) {
+        return response.status(403).json({
+          status: 'error',
+          message: 'No tienes permisos para acceder a este dispositivo'
+        })
+      }
+
+      // Obtener los IDs de los sensores asociados al dispositivo
+      const deviceSensorIds = device.sensors.map(sensor => sensor.id.toString())
+
+      if (deviceSensorIds.length === 0) {
+        return response.ok({
+          status: 'success',
+          message: 'El dispositivo no tiene sensores asociados',
+          data: {
+            device: {
+              id: device.id,
+              name: device.name,
+              sensors: []
+            },
+            readings: [],
+            pagination: {
+              page: parseInt(page),
+              limit: parseInt(limit),
+              total: 0,
+              pages: 0
+            }
+          }
+        })
+      }
+
+      // Construir query para MongoDB
+      let mongoQuery: any = {
+        deviceId: deviceId.toString(),
+        sensorId: { $in: deviceSensorIds }
+      }
+
+      // Filtrar por sensor específico si se proporciona
+      if (sensorId) {
+        if (deviceSensorIds.includes(sensorId)) {
+          mongoQuery.sensorId = sensorId
+        } else {
+          return response.status(400).json({
+            status: 'error',
+            message: 'El sensor especificado no está asociado a este dispositivo'
+          })
+        }
+      }
+
+      // Filtrar por rango de fechas si se proporciona
+      if (startDate || endDate) {
+        mongoQuery.timestamp = {}
+        if (startDate) {
+          mongoQuery.timestamp.$gte = new Date(startDate)
+        }
+        if (endDate) {
+          mongoQuery.timestamp.$lte = new Date(endDate)
+        }
+      }
+
+      // Obtener lecturas de MongoDB con paginación
+      const readings = await Reading.find(mongoQuery)
+        .sort({ timestamp: -1 })
+        .limit(limit * 1)
+        .skip((page - 1) * limit)
+        .lean()
+
+      const total = await Reading.countDocuments(mongoQuery)
+
+      // Formatear respuesta con información adicional
+      return response.ok({
+        status: 'success',
+        data: {
+          device: {
+            id: device.id,
+            name: device.name,
+            sensors: device.sensors.map(sensor => ({
+              id: sensor.id,
+              tipoSensor: sensor.tipoSensor,
+            }))
+          },
+          readings: readings,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            pages: Math.ceil(total / limit)
+          },
+          filters: {
+            sensorId: sensorId || null,
+            startDate: startDate || null,
+            endDate: endDate || null
+          }
+        }
+      })
+    } catch (error) {
+      console.error('Error al obtener lecturas de sensores del dispositivo:', error)
+      return response.status(500).json({
+        status: 'error',
+        message: 'Error al obtener lecturas de sensores',
         error: error.message
       })
     }

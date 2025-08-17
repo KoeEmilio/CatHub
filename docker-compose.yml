@@ -34,6 +34,27 @@ services:
     networks:
       - igmar-net
 
+    mqtt:
+    image: emqx:5.8.3   # última versión estable open source
+    container_name: mqtt-broker
+    restart: always
+    ports:
+      - "8083:8083"   # WebSocket
+      - "8084:8084"   # WebSocket con TLS
+      - "18083:18083" # Dashboard Web de EMQX
+    environment:
+      - EMQX_NODE__NAME=emqx@node1
+      - EMQX_NODE__COOKIE=secretcookie
+      - EMQX_LOG__CONSOLE=debug
+      - EMQX_DASHBOARD__DEFAULT_USER__LOGIN=admin
+      - EMQX_DASHBOARD__DEFAULT_USER__PASSWORD=public
+    volumes:
+      - emqx-data:/opt/emqx/data
+      - emqx-etc:/opt/emqx/etc
+      - emqx-log:/opt/emqx/log
+    networks:
+      - igmar-net
+
   cathub:
     build: .
     ports:
@@ -70,3 +91,4 @@ networks:
 volumes:
   mongo-data:
   postgres-data:
+  mqtt-data:

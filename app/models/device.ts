@@ -13,8 +13,6 @@ export default class Device extends BaseModel {
   @column()
   declare name: string
 
-  @column()
-  declare apiKey: string  // Token único para cada dispositivo
 
   @hasMany(() => DeviceEnvir, {
     foreignKey: 'idDevice',

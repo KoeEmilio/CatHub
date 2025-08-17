@@ -1,6 +1,6 @@
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 import Code from '#models/code'
-import Device from '#models/device'
+import DeviceEnvir from '#models/device_envir'
 
 export default class extends BaseSeeder {
   async run() {
@@ -8,11 +8,11 @@ export default class extends BaseSeeder {
     const existingCodes = await Code.query().limit(1)
     
     if (existingCodes.length === 0) {
-      // Obtener los devices existentes
-      const devices = await Device.query().orderBy('id', 'asc')
+      // Obtener los device_environments existentes
+      const deviceEnvirs = await DeviceEnvir.query().orderBy('id', 'asc')
       
-      if (devices.length === 0) {
-        console.log('❌ No hay devices existentes. Ejecuta primero el device_seeder.')
+      if (deviceEnvirs.length === 0) {
+        console.log('❌ No hay device environments existentes. Ejecuta primero el device_envir_seeder.')
         return
       }
 
@@ -28,17 +28,17 @@ export default class extends BaseSeeder {
         'C9D0E1F2'
       ]
 
-      // Insertar códigos para los devices existentes (máximo 8)
-      const maxCodes = Math.min(devices.length, codes.length)
+      // Insertar códigos para los device_environments existentes (máximo 8)
+      const maxCodes = Math.min(deviceEnvirs.length, codes.length)
       
       for (let i = 0; i < maxCodes; i++) {
         await Code.create({
           code: codes[i],
-          idDevice: devices[i].id,
+          idDevice: deviceEnvirs[i].id,
         })
       }
 
-      console.log(`✅ Creados ${maxCodes} códigos únicos para devices existentes`)
+      console.log(`✅ Creados ${maxCodes} códigos únicos para device environments existentes`)
     } else {
       console.log('ℹ️ Códigos ya existen')
     }

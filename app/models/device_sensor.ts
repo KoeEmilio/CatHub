@@ -17,6 +17,9 @@ export default class DeviceSensor extends BaseModel {
   @column()
   declare idSensor: number
 
+  @column({ columnName: 'sensor_identifier' })
+  declare sensorIdentifier: string | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

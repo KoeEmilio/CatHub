@@ -1,10 +1,10 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import ActuatorSetting from './actuator_setting.js'
+import ActuatorDevice from './actuator_device.js'
 
 export default class ActuatorDeviceSetting extends BaseModel {
-  static table = 'actuators_device_settings'
+  static table = 'actuator_device_settings'
 
   @column({ isPrimary: true })
   declare id: number
@@ -15,10 +15,10 @@ export default class ActuatorDeviceSetting extends BaseModel {
   @column()
   declare intervalo: number | null
 
-  @belongsTo(() => ActuatorSetting, {
+  @belongsTo(() => ActuatorDevice, {
     foreignKey: 'idActuatorSetting',
   })
-  declare actuatorSetting: BelongsTo<typeof ActuatorSetting>
+  declare actuatorDevice: BelongsTo<typeof ActuatorDevice>
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

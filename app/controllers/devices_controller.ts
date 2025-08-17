@@ -51,7 +51,6 @@ export default class DevicesController {
       // Crear dispositivo
       const device = await Device.create({
         name: data.name,
-        apiKey: `device_${randomUUID()}` // Generar API key único
       })
 
       // Crear relación device_envir
@@ -333,8 +332,8 @@ public async getAllDevices({ auth, response }: HttpContext) {
 }
 
 /**
- * Asignar un dispositivo a un environment
- * Ahora el código se guarda en la tabla codes separada
+ * Asignar un dispositivo existente a un environment
+ * Valida que el código ya existe y crea solo la asignación en device_envir
  */
 public async assignToEnvironment({ request, response, auth }: HttpContext) {
   try {
@@ -383,43 +382,66 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Verificar si el código ya existe en la tabla codes
+    // Verificar que el código YA EXISTE en la tabla codes
     const existingCode = await Code.query()
       .where('code', data.deviceCode)
+      .preload('device')
       .first()
 
-    if (existingCode) {
-      return response.status(400).json({
+    if (!existingCode) {
+      return response.status(404).json({
         status: 'error',
-        message: `El código ${data.deviceCode} ya está en uso. Ingresa un código diferente.`
+        message: `El código ${data.deviceCode} no existe. Solo puedes asignar dispositivos con códigos válidos existentes.`
       })
     }
 
-    // Crear un nuevo dispositivo
-    const device = await Device.create({
-      name: data.alias, // Usar el alias como nombre del dispositivo
-      apiKey: `device_${randomUUID()}` // Generar API key único
-    })
+    // Generar identifier automáticamente si no existe
+    if (!existingCode.identifier) {
+      let uniqueIdentifier = ''
+      let isUnique = false
+      
+      // Generar identifier único
+      while (!isUnique) {
+        uniqueIdentifier = Code.generateUniqueIdentifier()
+        const existingIdentifier = await Code.query()
+          .where('identifier', uniqueIdentifier)
+          .first()
+        
+        if (!existingIdentifier) {
+          isUnique = true
+        }
+      }
+      
+      // Actualizar el código con el nuevo identifier
+      existingCode.identifier = uniqueIdentifier
+      await existingCode.save()
+    }
 
-    // Crear el código del dispositivo en la tabla codes
-    await Code.create({
-      code: data.deviceCode,
-      idDevice: device.id
-    })
+    // Verificar que el dispositivo no esté ya asignado al mismo environment
+    const existingAssignment = await DeviceEnvir.query()
+      .where('idDevice', existingCode.idDevice)
+      .where('idEnvironment', data.environmentId)
+      .first()
 
-    // Crear la asignación en device_envir (sin código, comida, ni intervalo)
+    if (existingAssignment) {
+      return response.status(400).json({
+        status: 'error',
+        message: `El dispositivo con código ${data.deviceCode} ya está asignado a este environment.`
+      })
+    }
+
+    // Crear solo la asignación en device_envir
     const deviceEnvir = await DeviceEnvir.create({
-      alias: data.alias,
+      alias: data.alias, // El alias solo va en device_envir
       type: data.type,
       status: data.status || 'abastecido',
-      idDevice: device.id,
+      idDevice: existingCode.idDevice,
       idEnvironment: data.environmentId
     })
 
     // Cargar las relaciones para la respuesta
     await deviceEnvir.load('device')
     await deviceEnvir.load('environment')
-    await device.load('code')
 
     return response.status(201).json({
       status: 'success',
@@ -427,10 +449,10 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       data: {
         deviceEnvir,
         device: {
-          id: device.id,
-          name: device.name,
-          apiKey: device.apiKey,
-          code: device.code?.code || null
+          id: deviceEnvir.device.id,
+          name: deviceEnvir.device.name, // Usar deviceEnvir.device en lugar de existingCode.device
+          code: data.deviceCode,
+          identifier: existingCode.identifier // Incluir el identifier generado
         },
         environment: {
           id: environment.id,
@@ -512,7 +534,6 @@ public async getDeviceEnvironment({ params, auth, response }: HttpContext) {
         device: {
           id: deviceEnvir.device.id,
           name: deviceEnvir.device.name,
-          apiKey: deviceEnvir.device.apiKey
         },
         environment: {
           id: deviceEnvir.environment.id,
@@ -680,7 +701,6 @@ public async updateDeviceEnvironment({ params, request, response, auth }: HttpCo
         device: {
           id: deviceEnvir.device.id,
           name: deviceEnvir.device.name,
-          apiKey: deviceEnvir.device.apiKey
         },
         environment: {
           id: deviceEnvir.environment.id,

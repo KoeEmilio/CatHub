@@ -75,6 +75,7 @@ router.group(() => {
   router.get('/device/:deviceId', [ReadingsController, 'index']).use(middleware.auth())
   router.get('/device/:deviceId/range', [ReadingsController, 'getByDateRange']).use(middleware.auth())
   router.get('/device/:deviceId/stats', [ReadingsController, 'getStats']).use(middleware.auth())
+  router.get('/device/:deviceId/sensor-readings', [ReadingsController, 'getDeviceSensorReadings']).use(middleware.auth())
 }).prefix('/api/readings')
 
 // Rutas para dispositivos (endpoints que consumen Arduino/Raspberry Pi)

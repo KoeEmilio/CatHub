@@ -5,7 +5,7 @@ import Device from './device.js'
 import Environment from './environment.js'
 
 export default class DeviceEnvir extends BaseModel {
-  static table = 'device_envirs'
+  static table = 'device_environments'
 
   @column({ isPrimary: true })
   declare id: number

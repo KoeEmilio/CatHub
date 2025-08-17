@@ -1,10 +1,10 @@
 import { DateTime } from 'luxon'
 import { BaseModel, column, belongsTo, beforeSave } from '@adonisjs/lucid/orm'
 import type { BelongsTo } from '@adonisjs/lucid/types/relations'
-import Device from './device.js'
+import DeviceEnvir from './device_envir.js'
 
 export default class Code extends BaseModel {
-  static table = 'codes'
+  static table = 'device_codes'
 
   @column({ isPrimary: true })
   declare id: number
@@ -13,12 +13,15 @@ export default class Code extends BaseModel {
   declare code: string
 
   @column()
+  declare identifier: string | null
+
+  @column()
   declare idDevice: number
 
-  @belongsTo(() => Device, {
+  @belongsTo(() => DeviceEnvir, {
     foreignKey: 'idDevice',
   })
-  declare device: BelongsTo<typeof Device>
+  declare device: BelongsTo<typeof DeviceEnvir>
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -26,7 +29,6 @@ export default class Code extends BaseModel {
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 
-  // Validar el formato del código antes de guardar
   @beforeSave()
   static async validateCode(code: Code) {
     if (code.code) {
@@ -37,7 +39,6 @@ export default class Code extends BaseModel {
     }
   }
 
-  // Función estática para validar códigos de dispositivo
   static validateDeviceCode(code: string): {
     isValid: boolean
     message: string
@@ -73,5 +74,43 @@ export default class Code extends BaseModel {
       result += chars.charAt(Math.floor(Math.random() * chars.length))
     }
     return result
+  }
+
+  // Generar un identificador único de 12 caracteres para el dispositivo
+  static generateUniqueIdentifier(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    let result = ''
+    for (let i = 0; i < 12; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return result
+  }
+
+  // Validar formato del identificador
+  static validateIdentifier(identifier: string): {
+    isValid: boolean
+    message: string
+  } {
+    // Verificar longitud
+    if (identifier.length !== 12) {
+      return {
+        isValid: false,
+        message: 'El identificador debe tener exactamente 12 caracteres'
+      }
+    }
+
+    // Verificar que solo contenga caracteres alfanuméricos
+    const identifierPattern = /^[A-Za-z0-9]{12}$/
+    if (!identifierPattern.test(identifier)) {
+      return {
+        isValid: false,
+        message: 'El identificador debe contener solo letras y números (12 caracteres alfanuméricos)'
+      }
+    }
+
+    return {
+      isValid: true,
+      message: 'Identificador válido'
+    }
   }
 }

@@ -11,54 +11,43 @@ export default class SensorSeeder extends BaseSeeder {
       await Sensor.createMany([
         // Sensores Ultrasónicos (4 unidades)
         {
-          tipoSensor: 'Sensor Ultrasónico HC-SR04 #1',
-          nomenclatura: 'sen_ultra_01'
+          tipoSensor: 'Sensor Ultrasónico HC-SR04 #1'
         },
         {
-          tipoSensor: 'Sensor Ultrasónico HC-SR04 #2',
-          nomenclatura: 'sen_ultra_02'
+          tipoSensor: 'Sensor Ultrasónico HC-SR04 #2'
         },
         {
-          tipoSensor: 'Sensor Ultrasónico HC-SR04 #3',
-          nomenclatura: 'sen_ultra_03'
+          tipoSensor: 'Sensor Ultrasónico HC-SR04 #3'
         },
         {
-          tipoSensor: 'Sensor Ultrasónico HC-SR04 #4',
-          nomenclatura: 'sen_ultra_04'
+          tipoSensor: 'Sensor Ultrasónico HC-SR04 #4'
         },
         // Sensor de Agua
         {
-          tipoSensor: 'Sensor de Nivel de Agua',
-          nomenclatura: 'sen_agua'
+          tipoSensor: 'Sensor de Nivel de Agua'
         },
         // Drivers/Actuadores
         {
-          tipoSensor: 'Driver Bomba de Agua',
-          nomenclatura: 'drv_bomba_agua'
+          tipoSensor: 'Driver Bomba de Agua'
         },
         {
-          tipoSensor: 'Driver Motor',
-          nomenclatura: 'drv_motor'
+          tipoSensor: 'Driver Motor'
         },
         // Sensor Infrarrojo
         {
-          tipoSensor: 'Sensor Infrarrojo',
-          nomenclatura: 'sen_ir'
+          tipoSensor: 'Sensor Infrarrojo'
         },
         // Sensor de Humedad y Temperatura (DHT22/DHT11)
         {
-          tipoSensor: 'Sensor Humedad y Temperatura DHT22',
-          nomenclatura: 'sen_hum_temp'
+          tipoSensor: 'Sensor Humedad y Temperatura DHT22'
         },
         // Sensor de Gas
         {
-          tipoSensor: 'Sensor de Gas MQ-2',
-          nomenclatura: 'sen_gas'
+          tipoSensor: 'Sensor de Gas MQ-2'
         },
         // Sensor de Carga/Peso
         {
-          tipoSensor: 'Celda de Carga con HX711',
-          nomenclatura: 'sen_carga'
+          tipoSensor: 'Celda de Carga con HX711'
         }
       ])
 
