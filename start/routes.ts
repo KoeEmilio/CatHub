@@ -59,8 +59,8 @@ router.group(() => {
   router.put('/:id', [DevicesController, 'update'])
   router.delete('/:id', [DevicesController, 'destroy'])
   
-  // Nueva funcionalidad para asignar dispositivos
-  router.post('/assign-to-environment', [DevicesController, 'assignToEnvironment'])
+  // Nueva funcionalidad para asignar dispositivos - UPDATED ROUTE
+  router.post('/environments/:environmentId/assign', [DevicesController, 'assignToEnvironment'])
   router.get('/user-environments', [DevicesController, 'getUserEnvironments'])
   
   // Nuevas rutas para gestión de device_envir
