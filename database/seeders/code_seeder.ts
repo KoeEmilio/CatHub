@@ -34,7 +34,7 @@ export default class extends BaseSeeder {
       for (let i = 0; i < maxCodes; i++) {
         await Code.create({
           code: codes[i],
-          idDevice: deviceEnvirs[i].id,
+          idDeviceEnvironment: deviceEnvirs[i].id,
         })
       }
 

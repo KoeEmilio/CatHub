@@ -13,6 +13,7 @@ export default class DeviceEnvirSeeder extends BaseSeeder {
           alias: 'Bebedero Increíble',
           type: 'bebedero' as const,
           status: 'abastecido' as const,
+          identifier: 'bebedero_01',
           idDevice: 1, // Bebedero increible
           idEnvironment: 1, // Sala
         },
@@ -20,6 +21,7 @@ export default class DeviceEnvirSeeder extends BaseSeeder {
           alias: 'Comedor Grande',
           type: 'comedero' as const,
           status: 'abastecido' as const,
+          identifier: 'comedero_01',
           idDevice: 2, // comedor grande
           idEnvironment: 1, // Sala
         },
@@ -27,6 +29,7 @@ export default class DeviceEnvirSeeder extends BaseSeeder {
           alias: 'Arenero Espacioso',
           type: 'arenero' as const,
           status: 'abastecido' as const,
+          identifier: 'arenero_01',
           idDevice: 3, // arenero espacioso
           idEnvironment: 2, // Cuarto de estudio
         },

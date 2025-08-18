@@ -383,7 +383,7 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
     }
 
     // Verificar que el código YA EXISTE en la tabla codes
-    const existingCode = await Code.query()
+    const existingCode = await DeviceEnvir.query()
       .where('code', data.deviceCode)
       .preload('device')
       .first()

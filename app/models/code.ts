@@ -12,16 +12,13 @@ export default class Code extends BaseModel {
   @column()
   declare code: string
 
-  @column()
-  declare identifier: string | null
-
-  @column()
-  declare idDevice: number
+  @column({ columnName: 'id_device_environment' })
+  declare idDeviceEnvironment: number
 
   @belongsTo(() => DeviceEnvir, {
-    foreignKey: 'idDevice',
+    foreignKey: 'idDeviceEnvironment',
   })
-  declare device: BelongsTo<typeof DeviceEnvir>
+  declare deviceEnvironment: BelongsTo<typeof DeviceEnvir>
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
