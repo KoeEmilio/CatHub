@@ -335,28 +335,26 @@ public async getAllDevices({ auth, response }: HttpContext) {
  * Asignar un dispositivo existente a un environment
  * Valida que el código ya existe y crea solo la asignación en device_envir
  */
-public async assignToEnvironment({ request, response, auth }: HttpContext) {
+/**
+ * Asignar un dispositivo usando solo código y alias
+ * Detecta automáticamente el tipo y usa el environment del contexto
+ */
+public async assignToEnvironment({ request, response, auth, params }: HttpContext) {
   try {
     const user = auth.user
     if (!user) {
       return response.unauthorized({ message: 'No autenticado' })
     }
 
-    const data = request.only(['deviceCode', 'environmentId', 'alias', 'type', 'status'])
+    // Obtener environmentId desde los parámetros de la URL
+    const { environmentId } = params
+    const data = request.only(['deviceCode', 'alias'])
     
-    // Validar datos requeridos
-    if (!data.deviceCode || !data.environmentId || !data.alias || !data.type) {
+    // Validar datos requeridos (solo código y alias)
+    if (!data.deviceCode || !data.alias) {
       return response.status(400).json({
         status: 'error',
-        message: 'Todos los campos son obligatorios: deviceCode, environmentId, alias, type'
-      })
-    }
-
-    // Validar tipo de dispositivo
-    if (!['arenero', 'bebedero', 'comedero'].includes(data.type)) {
-      return response.status(400).json({
-        status: 'error',
-        message: 'El tipo de dispositivo debe ser: arenero, bebedero o comedero'
+        message: 'El código del dispositivo y el alias son obligatorios'
       })
     }
 
@@ -371,7 +369,7 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
 
     // Verificar que el environment existe y pertenece al usuario
     const environment = await Environment.query()
-      .where('id', data.environmentId)
+      .where('id', environmentId)
       .where('id_user', user.id)
       .first()
 
@@ -394,45 +392,26 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Obtener el device environment asociado al código
-    const deviceEnvironment = await DeviceEnvir.query()
+    // Obtener el device environment asociado al código para detectar el tipo
+    const sourceDeviceEnvironment = await DeviceEnvir.query()
       .where('id', existingCode.idDeviceEnvironment)
       .preload('device')
       .first()
 
-    if (!deviceEnvironment) {
+    if (!sourceDeviceEnvironment) {
       return response.status(404).json({
         status: 'error',
         message: 'No se encontró el device environment asociado al código.'
       })
     }
 
-    // Generar identifier automáticamente si no existe
-    if (!deviceEnvironment.identifier) {
-      let uniqueIdentifier = ''
-      let isUnique = false
-      
-      // Generar identifier único
-      while (!isUnique) {
-        uniqueIdentifier = Code.generateUniqueIdentifier()
-        const existingIdentifier = await DeviceEnvir.query()
-          .where('identifier', uniqueIdentifier)
-          .first()
-        
-        if (!existingIdentifier) {
-          isUnique = true
-        }
-      }
-      
-      // Actualizar el device environment con el nuevo identifier
-      deviceEnvironment.identifier = uniqueIdentifier
-      await deviceEnvironment.save()
-    }
+    // ✨ DETECTAR AUTOMÁTICAMENTE EL TIPO del dispositivo
+    const detectedType = sourceDeviceEnvironment.type
 
     // Verificar que el dispositivo no esté ya asignado al mismo environment
     const existingAssignment = await DeviceEnvir.query()
-      .where('idDevice', deviceEnvironment.idDevice)
-      .where('idEnvironment', data.environmentId)
+      .where('idDevice', sourceDeviceEnvironment.idDevice)
+      .where('idEnvironment', environmentId)
       .first()
 
     if (existingAssignment) {
@@ -442,14 +421,14 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Crear solo la asignación en device_envir
+    // Crear la nueva asignación en device_envir con tipo detectado automáticamente
     const deviceEnvir = await DeviceEnvir.create({
-      alias: data.alias, // El alias solo va en device_envir
-      type: data.type,
-      status: data.status || 'abastecido',
-      identifier: `${data.type}_${Date.now()}`, // Generar identifier único para esta nueva asignación
-      idDevice: deviceEnvironment.idDevice,
-      idEnvironment: data.environmentId
+      alias: data.alias,
+      type: detectedType, // ✨ TIPO DETECTADO AUTOMÁTICAMENTE
+      status: 'abastecido', // Status por defecto
+      identifier: `${detectedType}_${Date.now()}`, // Generar identifier único
+      idDevice: sourceDeviceEnvironment.idDevice,
+      idEnvironment: environmentId // ✨ ENVIRONMENT DESDE LA URL
     })
 
     // Cargar las relaciones para la respuesta
@@ -458,19 +437,23 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
 
     return response.status(201).json({
       status: 'success',
-      message: 'Dispositivo asignado al environment correctamente',
+      message: `Dispositivo ${detectedType} asignado automáticamente al environment`,
       data: {
         deviceEnvir,
         device: {
           id: deviceEnvir.device.id,
           name: deviceEnvir.device.name,
           code: data.deviceCode,
-          identifier: deviceEnvir.identifier // Usar el identifier del deviceEnvir creado
+          identifier: deviceEnvir.identifier
         },
         environment: {
           id: environment.id,
           name: environment.name,
           color: environment.color
+        },
+        autoDetected: {
+          type: detectedType,
+          message: `Tipo "${detectedType}" detectado automáticamente del código ${data.deviceCode}`
         }
       }
     })
