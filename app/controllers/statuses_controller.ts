@@ -351,6 +351,7 @@ export default class StatusesController {
       const areneros = await DeviceEnvir.query()
         .where('type', 'arenero')
         .preload('device')
+        .preload('code')
 
       // Obtener configuración de intervalo
       const actuatorSetting = await ActuatorDeviceSetting.query()
@@ -368,7 +369,7 @@ export default class StatusesController {
         intervaloEnHoras: intervalo ? Math.round(intervalo / 60 * 100) / 100 : null,
         dispositivo: {
           id: a.device.id,
-          code: a.device.code,
+          code: a.code?.code || a.identifier, // Usar el código de la relación o el identifier directo
           name: a.device.name
         }
       }))

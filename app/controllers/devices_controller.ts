@@ -382,10 +382,9 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
-    // Verificar que el código YA EXISTE en la tabla codes
-    const existingCode = await DeviceEnvir.query()
+    // Verificar que el código YA EXISTE en la tabla device_codes
+    const existingCode = await Code.query()
       .where('code', data.deviceCode)
-      .preload('device')
       .first()
 
     if (!existingCode) {
@@ -395,15 +394,28 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       })
     }
 
+    // Obtener el device environment asociado al código
+    const deviceEnvironment = await DeviceEnvir.query()
+      .where('id', existingCode.idDeviceEnvironment)
+      .preload('device')
+      .first()
+
+    if (!deviceEnvironment) {
+      return response.status(404).json({
+        status: 'error',
+        message: 'No se encontró el device environment asociado al código.'
+      })
+    }
+
     // Generar identifier automáticamente si no existe
-    if (!existingCode.identifier) {
+    if (!deviceEnvironment.identifier) {
       let uniqueIdentifier = ''
       let isUnique = false
       
       // Generar identifier único
       while (!isUnique) {
         uniqueIdentifier = Code.generateUniqueIdentifier()
-        const existingIdentifier = await Code.query()
+        const existingIdentifier = await DeviceEnvir.query()
           .where('identifier', uniqueIdentifier)
           .first()
         
@@ -412,14 +424,14 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
         }
       }
       
-      // Actualizar el código con el nuevo identifier
-      existingCode.identifier = uniqueIdentifier
-      await existingCode.save()
+      // Actualizar el device environment con el nuevo identifier
+      deviceEnvironment.identifier = uniqueIdentifier
+      await deviceEnvironment.save()
     }
 
     // Verificar que el dispositivo no esté ya asignado al mismo environment
     const existingAssignment = await DeviceEnvir.query()
-      .where('idDevice', existingCode.idDevice)
+      .where('idDevice', deviceEnvironment.idDevice)
       .where('idEnvironment', data.environmentId)
       .first()
 
@@ -435,7 +447,8 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
       alias: data.alias, // El alias solo va en device_envir
       type: data.type,
       status: data.status || 'abastecido',
-      idDevice: existingCode.idDevice,
+      identifier: `${data.type}_${Date.now()}`, // Generar identifier único para esta nueva asignación
+      idDevice: deviceEnvironment.idDevice,
       idEnvironment: data.environmentId
     })
 
@@ -450,9 +463,9 @@ public async assignToEnvironment({ request, response, auth }: HttpContext) {
         deviceEnvir,
         device: {
           id: deviceEnvir.device.id,
-          name: deviceEnvir.device.name, // Usar deviceEnvir.device en lugar de existingCode.device
+          name: deviceEnvir.device.name,
           code: data.deviceCode,
-          identifier: existingCode.identifier // Incluir el identifier generado
+          identifier: deviceEnvir.identifier // Usar el identifier del deviceEnvir creado
         },
         environment: {
           id: environment.id,
@@ -488,12 +501,12 @@ public async getDeviceEnvironment({ params, auth, response }: HttpContext) {
     const deviceEnvir = await DeviceEnvir.query()
       .where('id', deviceEnvirId)
       .preload('device', (deviceQuery) => {
-        deviceQuery.preload('code')
         deviceQuery.preload('deviceSensors', (sensorQuery) => {
           sensorQuery.preload('setting')
         })
       })
       .preload('environment')
+      .preload('code')
       .first()
 
     if (!deviceEnvir) {
@@ -530,7 +543,7 @@ public async getDeviceEnvironment({ params, auth, response }: HttpContext) {
         status: deviceEnvir.status,
         intervalo: intervalo,
         comida: comida,
-        code: deviceEnvir.device.code?.code || null,
+        code: deviceEnvir.code?.code || null,
         device: {
           id: deviceEnvir.device.id,
           name: deviceEnvir.device.name,
@@ -735,10 +748,9 @@ public async deleteDeviceEnvironment({ params, auth, response }: HttpContext) {
     // Buscar el registro device_envir con sus relaciones
     const deviceEnvir = await DeviceEnvir.query()
       .where('id', deviceEnvirId)
-      .preload('device', (deviceQuery) => {
-        deviceQuery.preload('code')
-      })
+      .preload('device')
       .preload('environment')
+      .preload('code')
       .first()
 
     if (!deviceEnvir) {
@@ -762,7 +774,7 @@ public async deleteDeviceEnvironment({ params, auth, response }: HttpContext) {
       alias: deviceEnvir.alias,
       type: deviceEnvir.type,
       status: deviceEnvir.status,
-      code: deviceEnvir.device.code?.code || null,
+      code: deviceEnvir.code?.code || null,
       device: {
         id: deviceEnvir.device.id,
         name: deviceEnvir.device.name
