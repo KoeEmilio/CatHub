@@ -53,9 +53,12 @@ router.group(() => {
 // Rutas de dispositivos
 router.group(() => {
   router.get('/all', [DevicesController, 'getAllDevices']).use(middleware.auth())
+  router.get('/all/detailed', [DevicesController, 'getAllDevices']).use(middleware.auth()) // Misma función pero con nombre más descriptivo
   router.get('/environment/:environmentId', [DevicesController, 'index'])
   router.post('/', [DevicesController, 'store'])
   router.get('/:id', [DevicesController, 'show'])
+  router.get('/:deviceId/details', [DevicesController, 'getDeviceWithDetails']) // NUEVA FUNCIÓN - Dispositivo específico con sensores y actuadores
+  router.get('/device-envir/:deviceEnvirId/details', [DevicesController, 'getDeviceEnvironmentWithDetails']) // ALTERNATIVA - Por device_envir
   router.put('/:id', [DevicesController, 'update'])
   router.delete('/:id', [DevicesController, 'destroy'])
   

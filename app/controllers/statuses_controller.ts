@@ -270,20 +270,31 @@ export default class StatusesController {
         })
       }
 
-      // Buscar o crear configuración de intervalo usando SQL directo
-      const existingInterval = await ActuatorDeviceSetting.query()
-        .whereHas('actuatorDevice', (query) => {
-          // Simplificado: usar ID directo o buscar por device
-          query.where('id', 1) // Ajustar según tu lógica
-        })
+      // Buscar si ya existe un actuator_device_environment para este device_envir
+      const ActuatorDevice = (await import('#models/actuator_device')).default
+      let actuatorDevice = await ActuatorDevice.query()
+        .where('idDevice', deviceEnvirId)
         .first()
 
-      if (existingInterval) {
-        existingInterval.intervalo = intervalo
-        await existingInterval.save()
+      // Si no existe, crear uno (asumiendo que existe un actuador con ID 1 para limpieza)
+      if (!actuatorDevice) {
+        actuatorDevice = await ActuatorDevice.create({
+          idActuator: 1, // ID del actuador de limpieza
+          idDevice: deviceEnvirId
+        })
+      }
+
+      // Buscar o crear la configuración de intervalo
+      let intervalSetting = await ActuatorDeviceSetting.query()
+        .where('idActuatorDeviceEnvironment', actuatorDevice.id)
+        .first()
+
+      if (intervalSetting) {
+        intervalSetting.intervalo = intervalo
+        await intervalSetting.save()
       } else {
         await ActuatorDeviceSetting.create({
-          idActuatorSetting: 1, // ID base para intervalos
+          idActuatorDeviceEnvironment: actuatorDevice.id,
           intervalo: intervalo
         })
       }
@@ -321,12 +332,21 @@ export default class StatusesController {
         })
       }
 
-      // Buscar intervalo en actuators_device_settings
-      const actuatorSetting = await ActuatorDeviceSetting.query()
-        .where('idActuatorSetting', 1) // ID base para intervalos
+      // Buscar actuator_device_environment para este device_envir
+      const ActuatorDevice = (await import('#models/actuator_device')).default
+      const actuatorDevice = await ActuatorDevice.query()
+        .where('idDevice', deviceEnvirId)
         .first()
 
-      const intervalo = actuatorSetting?.intervalo || null
+      let intervalo = null
+      if (actuatorDevice) {
+        // Buscar configuración de intervalo
+        const intervalSetting = await ActuatorDeviceSetting.query()
+          .where('idActuatorDeviceEnvironment', actuatorDevice.id)
+          .first()
+        
+        intervalo = intervalSetting?.intervalo || null
+      }
 
       return response.ok({
         deviceEnvirId: deviceEnvir.id,
@@ -353,26 +373,41 @@ export default class StatusesController {
         .preload('device')
         .preload('code')
 
-      // Obtener configuración de intervalo
-      const actuatorSetting = await ActuatorDeviceSetting.query()
-        .where('idActuatorSetting', 1) // ID base para intervalos
-        .first()
+      const ActuatorDevice = (await import('#models/actuator_device')).default
 
-      const intervalo = actuatorSetting?.intervalo || null
+      // Obtener datos de cada arenero con su intervalo específico
+      const areData = await Promise.all(
+        areneros.map(async (arenero) => {
+          // Buscar actuator_device_environment para este arenero
+          const actuatorDevice = await ActuatorDevice.query()
+            .where('idDevice', arenero.id)
+            .first()
 
-      const areData = areneros.map(a => ({
-        id: a.id,
-        alias: a.alias,
-        type: a.type,
-        status: a.status,
-        intervalo: intervalo,
-        intervaloEnHoras: intervalo ? Math.round(intervalo / 60 * 100) / 100 : null,
-        dispositivo: {
-          id: a.device.id,
-          code: a.code?.code || a.identifier, // Usar el código de la relación o el identifier directo
-          name: a.device.name
-        }
-      }))
+          let intervalo = null
+          if (actuatorDevice) {
+            // Buscar configuración de intervalo específica
+            const intervalSetting = await ActuatorDeviceSetting.query()
+              .where('idActuatorDeviceEnvironment', actuatorDevice.id)
+              .first()
+            
+            intervalo = intervalSetting?.intervalo || null
+          }
+
+          return {
+            id: arenero.id,
+            alias: arenero.alias,
+            type: arenero.type,
+            status: arenero.status,
+            intervalo: intervalo,
+            intervaloEnHoras: intervalo ? Math.round(intervalo / 60 * 100) / 100 : null,
+            dispositivo: {
+              id: arenero.device.id,
+              code: arenero.code?.code || arenero.identifier, // Usar el código de la relación o el identifier directo
+              name: arenero.device.name
+            }
+          }
+        })
+      )
 
       return response.ok(areData)
     } catch (error) {

@@ -4,7 +4,7 @@ import Environment from '../models/environment.js'
 import DeviceEnvir from '../models/device_envir.js'
 import Code from '../models/code.js'
 import ActuatorDeviceSetting from '../models/actuator_device_setting.js'
-import { randomUUID } from 'node:crypto'
+import ActuatorDevice from '../models/actuator_device.js'
 
 export default class DevicesController {
   /**
@@ -288,7 +288,7 @@ export default class DevicesController {
   }
 
   /**
- * Obtener todos los dispositivos del usuario autenticado
+ * Obtener todos los dispositivos del usuario autenticado con sensores y actuadores
  */
 public async getAllDevices({ auth, response }: HttpContext) {
   try {
@@ -299,33 +299,301 @@ public async getAllDevices({ auth, response }: HttpContext) {
 
     // Obtener todos los deviceEnvirs que pertenecen a entornos del usuario
     const deviceEnvirs = await DeviceEnvir.query()
-      .preload('device')
+      .preload('device', (deviceQuery) => {
+        deviceQuery
+          .preload('deviceSensors', (sensorQuery) => {
+            sensorQuery
+              .preload('sensor')
+              .preload('setting')
+          })
+          .preload('sensors') // Relación ManyToMany directa
+      })
       .preload('environment', (query) => {
         query.where('id_user', user.id)
       })
+      .preload('code')
       .whereHas('environment', (query) => {
         query.where('id_user', user.id)
       })
 
-    const devices = deviceEnvirs.map(deviceEnvir => ({
-      ...deviceEnvir.device.serialize(),
-      alias: deviceEnvir.alias,
-      type: deviceEnvir.type,
-      deviceEnvirId: deviceEnvir.id,
-      environment: deviceEnvir.environment
-    }))
+    // Obtener configuraciones de actuadores por cada device_envir
+    const devicesWithDetails = await Promise.all(
+      deviceEnvirs.map(async (deviceEnvir) => {
+        // CORREGIDO: Buscar actuadores relacionados al device_envir (no al device directamente)
+        const actuatorDevices = await ActuatorDevice.query()
+          .where('idDevice', deviceEnvir.id) // idDevice en ActuatorDevice apunta a device_environments.id
+          .preload('actuator')
+          .preload('actuatorDeviceSettings')
+
+        // Obtener configuración de intervalo desde el primer actuator device setting
+        let intervalo = null
+        if (actuatorDevices.length > 0 && actuatorDevices[0].actuatorDeviceSettings.length > 0) {
+          intervalo = actuatorDevices[0].actuatorDeviceSettings[0].intervalo
+        }
+
+        return {
+          // Información básica del device_envir
+          deviceEnvirId: deviceEnvir.id,
+          alias: deviceEnvir.alias,
+          type: deviceEnvir.type,
+          status: deviceEnvir.status,
+          identifier: deviceEnvir.identifier,
+          
+          // Información del dispositivo
+          device: {
+            id: deviceEnvir.device.id,
+            name: deviceEnvir.device.name,
+            
+            // Sensores con configuraciones
+            sensors: deviceEnvir.device.deviceSensors.map(deviceSensor => ({
+              id: deviceSensor.id,
+              sensorIdentifier: deviceSensor.sensorIdentifier,
+              sensor: {
+                id: deviceSensor.sensor.id,
+                tipoSensor: deviceSensor.sensor.tipoSensor, // Campo correcto del modelo
+              },
+              settings: {
+                id: deviceSensor.setting?.id || null,
+                comida: deviceSensor.setting?.comida || null,
+                // Agregar otros settings si existen
+              }
+            })),
+
+            // Lista de sensores (relación directa ManyToMany)
+            availableSensors: deviceEnvir.device.sensors.map(sensor => ({
+              id: sensor.id,
+              tipoSensor: sensor.tipoSensor, // Campo correcto del modelo
+            }))
+          },
+
+          // Información del environment
+          environment: {
+            id: deviceEnvir.environment.id,
+            name: deviceEnvir.environment.name,
+            color: deviceEnvir.environment.color
+          },
+
+          // Código del dispositivo
+          code: deviceEnvir.code?.code || null,
+
+          // Actuadores con configuraciones
+          actuators: actuatorDevices.map((actuatorDevice: any) => ({
+            id: actuatorDevice.id,
+            actuator: {
+              id: actuatorDevice.actuator.id,
+              nombre: actuatorDevice.actuator.nombre, // Campo correcto del modelo
+            },
+            settings: actuatorDevice.actuatorDeviceSettings.map((setting: any) => ({
+              id: setting.id,
+              intervalo: setting.intervalo,
+              // Agregar otros campos de configuración
+            }))
+          })),
+
+          // Configuraciones globales
+          configurations: {
+            intervalo: intervalo,
+            intervaloEnHoras: intervalo ? Math.round(intervalo / 60 * 100) / 100 : null,
+          },
+
+          // Timestamps
+          createdAt: deviceEnvir.createdAt,
+          updatedAt: deviceEnvir.updatedAt
+        }
+      })
+    )
 
     return response.ok({
       status: 'success',
-      message: 'Dispositivos obtenidos correctamente',
-      data: devices,
-      total: devices.length
+      message: 'Dispositivos obtenidos correctamente con sensores y actuadores',
+      data: devicesWithDetails,
+      total: devicesWithDetails.length,
+      summary: {
+        totalDevices: devicesWithDetails.length,
+        totalSensors: devicesWithDetails.reduce((acc, device) => acc + device.device.sensors.length, 0),
+        totalActuators: devicesWithDetails.reduce((acc, device) => acc + device.actuators.length, 0),
+        deviceTypes: {
+          areneros: devicesWithDetails.filter(d => d.type === 'arenero').length,
+          comederos: devicesWithDetails.filter(d => d.type === 'comedero').length,
+          bebederos: devicesWithDetails.filter(d => d.type === 'bebedero').length
+        }
+      }
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error al obtener todos los dispositivos:', error)
     return response.status(500).json({
       status: 'error',
       message: 'Error al obtener los dispositivos',
+      error: error.message
+    })
+  }
+}
+
+/**
+ * Obtener un dispositivo específico por su ID con todos sus sensores y actuadores
+ */
+public async getDeviceWithDetails({ params, auth, response }: HttpContext) {
+  try {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ message: 'No autenticado' })
+    }
+
+    const { deviceId } = params
+
+    // Buscar el dispositivo a través de device_envir (ya que puede estar en múltiples environments)
+    const deviceEnvirs = await DeviceEnvir.query()
+      .where('idDevice', deviceId)
+      .preload('device', (deviceQuery) => {
+        deviceQuery
+          .preload('deviceSensors', (sensorQuery) => {
+            sensorQuery
+              .preload('sensor')
+              .preload('setting')
+          })
+          .preload('sensors') // Relación ManyToMany directa
+      })
+      .preload('environment', (query) => {
+        query.where('id_user', user.id) // Solo environments del usuario
+      })
+      .preload('code')
+      .whereHas('environment', (query) => {
+        query.where('id_user', user.id) // Verificar permisos del usuario
+      })
+
+    if (deviceEnvirs.length === 0) {
+      return response.status(404).json({
+        status: 'error',
+        message: 'Dispositivo no encontrado o sin permisos de acceso'
+      })
+    }
+
+    // Obtener detalles completos para cada asignación del dispositivo
+    const deviceDetails = await Promise.all(
+      deviceEnvirs.map(async (deviceEnvir) => {
+        // CORREGIDO: Los actuadores están relacionados al device_envir, no al device directamente
+        const actuatorDevices = await ActuatorDevice.query()
+          .where('idDevice', deviceEnvir.id) // Relacionado a device_environments.id
+          .preload('actuator')
+          .preload('actuatorDeviceSettings')
+
+        // Obtener configuración de intervalo desde el primer actuator device setting
+        let intervalo = null
+        if (actuatorDevices.length > 0 && actuatorDevices[0].actuatorDeviceSettings.length > 0) {
+          intervalo = actuatorDevices[0].actuatorDeviceSettings[0].intervalo
+        }
+
+        return {
+          // Información básica del device_envir
+          deviceEnvirId: deviceEnvir.id,
+          alias: deviceEnvir.alias,
+          type: deviceEnvir.type,
+          status: deviceEnvir.status,
+          identifier: deviceEnvir.identifier,
+          
+          // Información del dispositivo
+          device: {
+            id: deviceEnvir.device.id,
+            name: deviceEnvir.device.name,
+            
+            // Sensores con configuraciones (estos sí van directo al device)
+            sensors: deviceEnvir.device.deviceSensors.map(deviceSensor => ({
+              id: deviceSensor.id,
+              sensorIdentifier: deviceSensor.sensorIdentifier,
+              sensor: {
+                id: deviceSensor.sensor.id,
+                tipoSensor: deviceSensor.sensor.tipoSensor,
+              },
+              settings: {
+                id: deviceSensor.setting?.id || null,
+                comida: deviceSensor.setting?.comida || null,
+              }
+            })),
+
+            // Lista de sensores disponibles (relación ManyToMany)
+            availableSensors: deviceEnvir.device.sensors.map(sensor => ({
+              id: sensor.id,
+              tipoSensor: sensor.tipoSensor,
+            }))
+          },
+
+          // Información del environment
+          environment: {
+            id: deviceEnvir.environment.id,
+            name: deviceEnvir.environment.name,
+            color: deviceEnvir.environment.color
+          },
+
+          // Código del dispositivo
+          code: deviceEnvir.code?.code || null,
+
+          // Actuadores específicos de esta asignación device_envir
+          actuators: actuatorDevices.map((actuatorDevice: any) => ({
+            id: actuatorDevice.id,
+            actuator: {
+              id: actuatorDevice.actuator.id,
+              nombre: actuatorDevice.actuator.nombre,
+            },
+            settings: actuatorDevice.actuatorDeviceSettings.map((setting: any) => ({
+              id: setting.id,
+              intervalo: setting.intervalo,
+            }))
+          })),
+
+          // Configuraciones globales
+          configurations: {
+            intervalo: intervalo,
+            intervaloEnHoras: intervalo ? Math.round(intervalo / 60 * 100) / 100 : null,
+          },
+
+          // Timestamps
+          createdAt: deviceEnvir.createdAt,
+          updatedAt: deviceEnvir.updatedAt
+        }
+      })
+    )
+
+    // Información general del dispositivo (solo una vez)
+    const mainDevice = deviceEnvirs[0].device
+
+    return response.ok({
+      status: 'success',
+      message: 'Dispositivo obtenido correctamente con sensores y actuadores',
+      data: {
+        // Información general del dispositivo
+        deviceId: mainDevice.id,
+        deviceName: mainDevice.name,
+        
+        // Sensores del dispositivo (son los mismos para todas las asignaciones)
+        sensors: mainDevice.deviceSensors.map(deviceSensor => ({
+          id: deviceSensor.id,
+          sensorIdentifier: deviceSensor.sensorIdentifier,
+          sensor: {
+            id: deviceSensor.sensor.id,
+            tipoSensor: deviceSensor.sensor.tipoSensor,
+          },
+          settings: {
+            id: deviceSensor.setting?.id || null,
+            comida: deviceSensor.setting?.comida || null,
+          }
+        })),
+
+        // Asignaciones del dispositivo (puede estar en múltiples environments)
+        assignments: deviceDetails,
+        
+        // Resumen
+        summary: {
+          totalAssignments: deviceDetails.length,
+          totalActuators: deviceDetails.reduce((acc, detail) => acc + detail.actuators.length, 0),
+          environments: deviceDetails.map(detail => detail.environment.name).join(', ')
+        }
+      }
+    })
+  } catch (error: any) {
+    console.error('Error al obtener dispositivo con detalles:', error)
+    return response.status(500).json({
+      status: 'error',
+      message: 'Error al obtener el dispositivo',
       error: error.message
     })
   }
@@ -816,6 +1084,143 @@ public async getUserEnvironments({ auth, response }: HttpContext) {
     return response.status(500).json({
       status: 'error',
       message: 'Error al obtener environments',
+      error: error.message
+    })
+  }
+}
+
+/**
+ * Obtener un device_environment específico por su ID con todos sus sensores y actuadores
+ * Esta función busca por deviceEnvirId en lugar de deviceId
+ */
+public async getDeviceEnvironmentWithDetails({ params, auth, response }: HttpContext) {
+  try {
+    const user = auth.user
+    if (!user) {
+      return response.unauthorized({ message: 'No autenticado' })
+    }
+
+    const { deviceEnvirId } = params
+
+    // Buscar directamente el device_envir por su ID
+    const deviceEnvir = await DeviceEnvir.query()
+      .where('id', deviceEnvirId)
+      .preload('device', (deviceQuery) => {
+        deviceQuery
+          .preload('deviceSensors', (sensorQuery) => {
+            sensorQuery
+              .preload('sensor')
+              .preload('setting')
+          })
+          .preload('sensors') // Relación ManyToMany directa
+      })
+      .preload('environment')
+      .preload('code')
+      .first()
+
+    if (!deviceEnvir) {
+      return response.status(404).json({
+        status: 'error',
+        message: 'Device environment no encontrado'
+      })
+    }
+
+    // Verificar que el environment pertenece al usuario
+    if (deviceEnvir.environment.idUser !== user.id) {
+      return response.status(403).json({
+        status: 'error',
+        message: 'No tienes permisos para acceder a este dispositivo'
+      })
+    }
+
+    // Obtener actuadores relacionados al device_envir
+    const actuatorDevices = await ActuatorDevice.query()
+      .where('idDevice', deviceEnvir.id) // Relacionado a device_environments.id
+      .preload('actuator')
+      .preload('actuatorDeviceSettings')
+
+    // Obtener configuración de intervalo desde el primer actuator device setting
+    let intervalo = null
+    if (actuatorDevices.length > 0 && actuatorDevices[0].actuatorDeviceSettings.length > 0) {
+      intervalo = actuatorDevices[0].actuatorDeviceSettings[0].intervalo
+    }
+
+    return response.ok({
+      status: 'success',
+      message: 'Device environment obtenido correctamente con sensores y actuadores',
+      data: {
+        // Información del device_envir
+        deviceEnvirId: deviceEnvir.id,
+        alias: deviceEnvir.alias,
+        type: deviceEnvir.type,
+        status: deviceEnvir.status,
+        identifier: deviceEnvir.identifier,
+        
+        // Información del dispositivo físico
+        device: {
+          id: deviceEnvir.device.id,
+          name: deviceEnvir.device.name,
+          
+          // Sensores con configuraciones (van directo al device)
+          sensors: deviceEnvir.device.deviceSensors.map(deviceSensor => ({
+            id: deviceSensor.id,
+            sensorIdentifier: deviceSensor.sensorIdentifier,
+            sensor: {
+              id: deviceSensor.sensor.id,
+              tipoSensor: deviceSensor.sensor.tipoSensor,
+            },
+            settings: {
+              id: deviceSensor.setting?.id || null,
+              comida: deviceSensor.setting?.comida || null,
+            }
+          })),
+
+          // Lista de sensores disponibles (relación ManyToMany)
+          availableSensors: deviceEnvir.device.sensors.map(sensor => ({
+            id: sensor.id,
+            tipoSensor: sensor.tipoSensor,
+          }))
+        },
+
+        // Información del environment
+        environment: {
+          id: deviceEnvir.environment.id,
+          name: deviceEnvir.environment.name,
+          color: deviceEnvir.environment.color
+        },
+
+        // Código del dispositivo
+        code: deviceEnvir.code?.code || null,
+
+        // Actuadores específicos de este device_envir
+        actuators: actuatorDevices.map((actuatorDevice: any) => ({
+          id: actuatorDevice.id,
+          actuator: {
+            id: actuatorDevice.actuator.id,
+            nombre: actuatorDevice.actuator.nombre,
+          },
+          settings: actuatorDevice.actuatorDeviceSettings.map((setting: any) => ({
+            id: setting.id,
+            intervalo: setting.intervalo,
+          }))
+        })),
+
+        // Configuraciones globales
+        configurations: {
+          intervalo: intervalo,
+          intervaloEnHoras: intervalo ? Math.round(intervalo / 60 * 100) / 100 : null,
+        },
+
+        // Timestamps
+        createdAt: deviceEnvir.createdAt,
+        updatedAt: deviceEnvir.updatedAt
+      }
+    })
+  } catch (error: any) {
+    console.error('Error al obtener device environment con detalles:', error)
+    return response.status(500).json({
+      status: 'error',
+      message: 'Error al obtener el device environment',
       error: error.message
     })
   }

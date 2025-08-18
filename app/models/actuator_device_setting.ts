@@ -9,14 +9,14 @@ export default class ActuatorDeviceSetting extends BaseModel {
   @column({ isPrimary: true })
   declare id: number
 
-  @column()
-  declare idActuatorSetting: number
+  @column({ columnName: 'id_actuator_device_environment' })
+  declare idActuatorDeviceEnvironment: number
 
   @column()
   declare intervalo: number | null
 
   @belongsTo(() => ActuatorDevice, {
-    foreignKey: 'idActuatorSetting',
+    foreignKey: 'idActuatorDeviceEnvironment',
   })
   declare actuatorDevice: BelongsTo<typeof ActuatorDevice>
 

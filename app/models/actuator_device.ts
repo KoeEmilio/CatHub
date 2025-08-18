@@ -5,16 +5,16 @@ import Actuator from './actuator.js'
 import DeviceEnvir from './device_envir.js'
 import ActuatorDeviceSetting from './actuator_device_setting.js'
 
-export default class ActuatorSetting extends BaseModel {
-  static table = 'actuators_device'
+export default class ActuatorDevice extends BaseModel {
+  static table = 'actuator_device_environment'
 
   @column({ isPrimary: true })
   declare id: number
 
-  @column()
+  @column({ columnName: 'id_actuator' })
   declare idActuator: number
 
-  @column()
+  @column({ columnName: 'id_device' })
   declare idDevice: number
 
   @belongsTo(() => Actuator, {
@@ -28,7 +28,7 @@ export default class ActuatorSetting extends BaseModel {
   declare device: BelongsTo<typeof DeviceEnvir>
 
   @hasMany(() => ActuatorDeviceSetting, {
-    foreignKey: 'idActuatorSetting',
+    foreignKey: 'idActuatorDeviceEnvironment',
   })
   declare actuatorDeviceSettings: HasMany<typeof ActuatorDeviceSetting>
 
