@@ -34,31 +34,61 @@ services:
     networks:
       - igmar-net
 
-    mqtt:
-    image: emqx:5.8.3   # última versión estable open source
+  # mqtt:
+  #   image: emqx:5.8.3
+  #   container_name: mqtt-broker
+  #   restart: always
+  #   ports:
+  #     - "${SOCKET_PORT}:${SOCKET_PORT}"
+  #     - "${SOCKET_PORT_TLS}:${SOCKET_PORT_TLS}"
+  #     - "${DASHBOARD_PORT}:${DASHBOARD_PORT}"
+  #   environment:
+  #     - EMQX_NODE__NAME=${EMQX_NODE__NAME}
+  #     - EMQX_NODE__COOKIE=${EMQX_NODE__COOKIE}
+  #     - EMQX_LOG__LEVEL=${EMQX_LOG__LEVEL}
+  #     - EMQX_DASHBOARD_DEFAULT_USER__USERNAME=${EMQX_DASHBOARD_DEFAULT_USER__USERNAME}
+  #     - EMQX_DASHBOARD_DEFAULT_USER__PASSWORD=${EMQX_DASHBOARD_DEFAULT_USER__PASSWORD}
+  #   volumes:
+  #     - emqx-data:/opt/emqx/data
+  #     - emqx-etc:/opt/emqx/etc
+  #     - emqx-log:/opt/emqx/log
+  #   networks:
+  #     - igmar-net
+
+  mqtt:
+    image: emqx:5.8.3
     container_name: mqtt-broker
     restart: always
     ports:
-      - "8083:8083"   # WebSocket
-      - "8084:8084"   # WebSocket con TLS
-      - "18083:18083" # Dashboard Web de EMQX
+      - "${SOCKET_PORT}:${SOCKET_PORT}"        # e.g. 1883 (si quieres mantenerlo)
+      - "${SOCKET_PORT_TLS}:${SOCKET_PORT_TLS}" # e.g. 8883 (TLS MQTT)
+      - "${DASHBOARD_PORT}:${DASHBOARD_PORT}"  # dashboard (ej. 18083)
+      - "8884:8884"                            # WSS (WebSocket TLS)
     environment:
-      - EMQX_NODE__NAME=emqx@node1
-      - EMQX_NODE__COOKIE=secretcookie
-      - EMQX_LOG__CONSOLE=debug
-      - EMQX_DASHBOARD__DEFAULT_USER__LOGIN=admin
-      - EMQX_DASHBOARD__DEFAULT_USER__PASSWORD=public
+      - EMQX_NODE__NAME=${EMQX_NODE__NAME}
+      - EMQX_NODE__COOKIE=${EMQX_NODE__COOKIE}
+      - EMQX_LOG__LEVEL=${EMQX_LOG__LEVEL}
+      - EMQX_DASHBOARD_DEFAULT_USER__USERNAME=${EMQX_DASHBOARD_DEFAULT_USER__USERNAME}
+      - EMQX_DASHBOARD_DEFAULT_USER__PASSWORD=${EMQX_DASHBOARD_DEFAULT_USER__PASSWORD}
+
+      # --- Opcional: desactivar WS no-TLS si no lo quieres (activa solo si necesitas) ---
+      - EMQX_LISTENER__WS__EXTERNAL=0
+
     volumes:
       - emqx-data:/opt/emqx/data
       - emqx-etc:/opt/emqx/etc
       - emqx-log:/opt/emqx/log
+
+      # Montar certs Let's Encrypt directamente (siempre prueba primero)
+      - /opt/emqx-certs:/certs:ro
+
     networks:
       - igmar-net
 
   cathub:
     build: .
-    ports:
-      - "${API_PORT}:${API_PORT}"
+    # ports:
+    #   - "${API_PORT}:${API_PORT}"
     restart: unless-stopped
     environment:
       LOG_LEVEL: info
@@ -92,3 +122,6 @@ volumes:
   mongo-data:
   postgres-data:
   mqtt-data:
+  emqx-data:
+  emqx-etc:
+  emqx-log:
