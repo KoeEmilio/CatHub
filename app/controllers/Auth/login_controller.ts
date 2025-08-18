@@ -12,7 +12,7 @@ export default class LoginController {
       const user = await User.verifyCredentials(email, password)
       
       const token = await User.accessTokens.create(user, ['*'], {
-        expiresIn: '5 minutes',
+        expiresIn: '6 hours',
       })
       
       return response.ok({
