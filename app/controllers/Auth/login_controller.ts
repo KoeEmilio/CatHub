@@ -8,8 +8,34 @@ export default class LoginController {
   public async login({ request, response }: HttpContext) {
     const { email, password } = request.only(['email', 'password'])
     
+    // Validar que se proporcionen ambos campos
+    if (!email || !password) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'Email y contraseña son requeridos'
+      })
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'El formato del email no es válido'
+      })
+    }
+
+    // Validar longitud mínima de contraseña
+    if (password.length < 6) {
+      return response.status(400).json({
+        status: 'error',
+        message: 'La contraseña debe tener al menos 6 caracteres'
+      })
+    }
+    
     try {
-      const user = await User.verifyCredentials(email, password)
+      // Convertir email a minúsculas para la búsqueda
+      const user = await User.verifyCredentials(email.toLowerCase(), password)
       
       const token = await User.accessTokens.create(user, ['*'], {
         expiresIn: '6 hours',
@@ -32,10 +58,9 @@ export default class LoginController {
     } catch (error) {
       console.error('Error durante el login:', error)
       
-      return response.unauthorized({
+      return response.status(401).json({
         status: 'error',
-        message: 'Credenciales inválidas',
-        error: error.message
+        message: 'Credenciales inválidas'
       })
     }
   }

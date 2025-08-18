@@ -10,8 +10,41 @@ export default class UsersController {
     try {
       const data = request.only(['fullName', 'email', 'password'])
       
+      // Validar que todos los campos requeridos estén presentes
+      if (!data.fullName || !data.email || !data.password) {
+        return response.status(400).json({
+          status: 'error',
+          message: 'Todos los campos son requeridos: fullName, email, password'
+        })
+      }
+
+      // Validar formato de email usando regex
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(data.email)) {
+        return response.status(400).json({
+          status: 'error',
+          message: 'El formato del email no es válido'
+        })
+      }
+
+      // Validar longitud de la contraseña
+      if (data.password.length < 6) {
+        return response.status(400).json({
+          status: 'error',
+          message: 'La contraseña debe tener al menos 6 caracteres'
+        })
+      }
+
+      // Validar que el nombre tenga al menos 2 caracteres
+      if (data.fullName.trim().length < 2) {
+        return response.status(400).json({
+          status: 'error',
+          message: 'El nombre debe tener al menos 2 caracteres'
+        })
+      }
+      
       // Validar que el email no esté en uso
-      const existingUser = await User.findBy('email', data.email)
+      const existingUser = await User.findBy('email', data.email.toLowerCase())
       if (existingUser) {
         return response.status(400).json({
           status: 'error',
@@ -19,7 +52,14 @@ export default class UsersController {
         })
       }
       
-      const user = await User.create(data)
+      // Crear usuario con email en minúsculas
+      const userData = {
+        ...data,
+        email: data.email.toLowerCase(),
+        fullName: data.fullName.trim()
+      }
+      
+      const user = await User.create(userData)
       return response.status(201).json({
         status: 'success',
         message: 'Usuario creado correctamente',
@@ -91,15 +131,49 @@ export default class UsersController {
         })
       }
       
-      // Si se está actualizando el email, verificar que no esté en uso
-      if (data.email && data.email !== user.email) {
-        const existingUser = await User.findBy('email', data.email)
-        if (existingUser) {
+      // Validar email si se proporciona
+      if (data.email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(data.email)) {
           return response.status(400).json({
             status: 'error',
-            message: 'El email ya está en uso'
+            message: 'El formato del email no es válido'
           })
         }
+
+        // Verificar que el email no esté en uso por otro usuario
+        const normalizedEmail = data.email.toLowerCase()
+        if (normalizedEmail !== user.email.toLowerCase()) {
+          const existingUser = await User.findBy('email', normalizedEmail)
+          if (existingUser) {
+            return response.status(400).json({
+              status: 'error',
+              message: 'El email ya está en uso'
+            })
+          }
+        }
+        data.email = normalizedEmail
+      }
+
+      // Validar contraseña si se proporciona
+      if (data.password) {
+        if (data.password.length < 6) {
+          return response.status(400).json({
+            status: 'error',
+            message: 'La contraseña debe tener al menos 6 caracteres'
+          })
+        }
+      }
+
+      // Validar nombre si se proporciona
+      if (data.fullName) {
+        if (data.fullName.trim().length < 2) {
+          return response.status(400).json({
+            status: 'error',
+            message: 'El nombre debe tener al menos 2 caracteres'
+          })
+        }
+        data.fullName = data.fullName.trim()
       }
 
       // Actualizar campos específicos
