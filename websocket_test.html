@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CatHub - Test WebSocket Real Time</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .status.connected { background-color: #d4edda; color: #155724; }
+        .status.disconnected { background-color: #f8d7da; color: #721c24; }
+        .status.connecting { background-color: #fff3cd; color: #856404; }
+        
+        .message {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .message.new-reading {
+            border-left-color: #28a745;
+            background-color: #d4edda;
+        }
+        
+        .message.database-change {
+            border-left-color: #ffc107;
+            background-color: #fff3cd;
+        }
+        
+        .message.error {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button.danger {
+            background-color: #dc3545;
+        }
+        
+        button.danger:hover {
+            background-color: #c82333;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        #messages {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: #fafafa;
+        }
+        
+        .timestamp {
+            color: #666;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐱 CatHub - Prueba WebSocket en Tiempo Real</h1>
+        
+        <div id="connection-status" class="status connecting">
+            🔄 Conectando al servidor WebSocket...
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="total-messages">0</div>
+                <div class="stat-label">Mensajes Recibidos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="sensor-readings">0</div>
+                <div class="stat-label">Lecturas de Sensores</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="database-changes">0</div>
+                <div class="stat-label">Cambios en BD</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="uptime">0s</div>
+                <div class="stat-label">Tiempo Conectado</div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button onclick="testConnection()">🧪 Probar Conexión</button>
+            <button onclick="requestInitialData()">📊 Solicitar Datos Iniciales</button>
+            <button onclick="clearMessages()" class="danger">🗑️ Limpiar Mensajes</button>
+            <button onclick="toggleConnection()" id="toggle-btn">🔌 Desconectar</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h3>📨 Mensajes en Tiempo Real:</h3>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let socket;
+        let isConnected = false;
+        let startTime = Date.now();
+        let messageCount = 0;
+        let sensorReadingCount = 0;
+        let databaseChangeCount = 0;
+        
+        // URL del servidor (cambiar según tu configuración)
+        const SERVER_URL = 'http://192.168.114.57:3333'; // API Local
+        
+        function initializeSocket() {
+            console.log('🔄 Inicializando conexión WebSocket...');
+            
+            socket = io(SERVER_URL, {
+                transports: ['websocket', 'polling'],
+                timeout: 20000,
+                forceNew: true,
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5
+            });
+            
+            setupSocketEvents();
+        }
+        
+        function setupSocketEvents() {
+            const statusDiv = document.getElementById('connection-status');
+            
+            socket.on('connect', () => {
+                console.log('🟢 Conectado al WebSocket server');
+                isConnected = true;
+                statusDiv.className = 'status connected';
+                statusDiv.innerHTML = `🟢 Conectado al servidor (ID: ${socket.id})`;
+                document.getElementById('toggle-btn').textContent = '🔌 Desconectar';
+                startTime = Date.now();
+            });
+
+            socket.on('disconnect', (reason) => {
+                console.log('🔴 Desconectado:', reason);
+                isConnected = false;
+                statusDiv.className = 'status disconnected';
+                statusDiv.innerHTML = `🔴 Desconectado (${reason})`;
+                document.getElementById('toggle-btn').textContent = '🔌 Conectar';
+                addMessage(`Desconectado: ${reason}`, 'error');
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('❌ Error de conexión:', error);
+                statusDiv.className = 'status disconnected';
+                statusDiv.innerHTML = '❌ Error de conexión';
+                addMessage(`Error de conexión: ${error.message}`, 'error');
+            });
+
+            socket.on('reconnect', (attemptNumber) => {
+                console.log('🔄 Reconectado después de', attemptNumber, 'intentos');
+                addMessage(`Reconectado después de ${attemptNumber} intentos`, 'success');
+            });
+
+            // Eventos específicos de la aplicación
+            socket.on('new_sensor_reading', (data) => {
+                console.log('📊 Nueva lectura de sensor:', data);
+                sensorReadingCount++;
+                addMessage(`📊 Nueva lectura: ${data.sensorType || data.sensorName} = ${data.value} (Dispositivo: ${data.deviceId})`, 'new-reading');
+                updateStats();
+            });
+
+            socket.on('database_change', (data) => {
+                console.log('🔄 Cambio en base de datos:', data);
+                databaseChangeCount++;
+                addMessage(`🔄 Cambio en BD: ${data.type} en ${data.collection}`, 'database-change');
+                updateStats();
+            });
+
+            socket.on('initial_data', (data) => {
+                console.log('📊 Datos iniciales recibidos:', data);
+                addMessage(`📊 Datos iniciales recibidos: ${data.data?.length || 0} dispositivos`, 'success');
+            });
+
+            socket.on('test_response', (data) => {
+                console.log('🧪 Respuesta de prueba:', data);
+                addMessage(`🧪 Prueba exitosa: ${data.message}`, 'success');
+            });
+
+            socket.on('error', (data) => {
+                console.error('❌ Error del servidor:', data);
+                addMessage(`❌ Error: ${data.message}`, 'error');
+            });
+        }
+        
+        function addMessage(content, type = 'info') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `<span class="timestamp">${timestamp}</span>${content}`;
+            
+            messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
+            messageCount++;
+            
+            // Mantener solo los últimos 50 mensajes
+            while (messagesDiv.children.length > 50) {
+                messagesDiv.removeChild(messagesDiv.lastChild);
+            }
+            
+            updateStats();
+        }
+        
+        function updateStats() {
+            document.getElementById('total-messages').textContent = messageCount;
+            document.getElementById('sensor-readings').textContent = sensorReadingCount;
+            document.getElementById('database-changes').textContent = databaseChangeCount;
+            
+            if (isConnected) {
+                const uptime = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('uptime').textContent = `${uptime}s`;
+            }
+        }
+        
+        function testConnection() {
+            if (socket && isConnected) {
+                socket.emit('test_message', { 
+                    message: 'Hola desde el frontend de prueba',
+                    timestamp: new Date().toISOString()
+                });
+                addMessage('🧪 Mensaje de prueba enviado', 'info');
+            } else {
+                addMessage('❌ No hay conexión WebSocket', 'error');
+            }
+        }
+        
+        function requestInitialData() {
+            if (socket && isConnected) {
+                socket.emit('request_initial_data', {
+                    deviceIds: [1, 2, 3, 999], // IDs de ejemplo
+                    limit: 10
+                });
+                addMessage('📊 Solicitando datos iniciales...', 'info');
+            } else {
+                addMessage('❌ No hay conexión WebSocket', 'error');
+            }
+        }
+        
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+            messageCount = 0;
+            sensorReadingCount = 0;
+            databaseChangeCount = 0;
+            updateStats();
+            addMessage('🗑️ Mensajes limpiados', 'info');
+        }
+        
+        function toggleConnection() {
+            if (isConnected) {
+                socket.disconnect();
+            } else {
+                initializeSocket();
+            }
+        }
+        
+        // Actualizar estadísticas cada segundo
+        setInterval(() => {
+            if (isConnected) {
+                updateStats();
+            }
+        }, 1000);
+        
+        // Inicializar al cargar la página
+        window.addEventListener('load', () => {
+            initializeSocket();
+            addMessage('🚀 Página de prueba iniciada', 'info');
+        });
+    </script>
+</body>
+</html>

@@ -28,12 +28,89 @@ class WebSocketService {
     if (!this.io) return
 
     this.io.on('connection', (socket) => {
-      console.log('Cliente conectado:', socket.id)
+      console.log('🟢 Cliente conectado:', socket.id)
 
-      socket.on('disconnect', () => {
-        console.log('Cliente desconectado:', socket.id)
+      // Manejar solicitud de datos iniciales
+      socket.on('request_initial_data', async (data) => {
+        console.log('📊 Cliente solicita datos iniciales:', data)
+        await this.sendInitialData(socket, data)
+      })
+
+      // Manejar suscripción a dispositivo específico
+      socket.on('subscribe_device', (deviceId) => {
+        console.log(`📡 Cliente se suscribe al dispositivo: ${deviceId}`)
+        socket.join(`device_${deviceId}`)
+      })
+
+      // Manejar desuscripción de dispositivo
+      socket.on('unsubscribe_device', (deviceId) => {
+        console.log(`📡 Cliente se desuscribe del dispositivo: ${deviceId}`)
+        socket.leave(`device_${deviceId}`)
+      })
+
+      // Manejar mensaje de prueba
+      socket.on('test_message', (data) => {
+        console.log('🧪 Mensaje de prueba recibido:', data)
+        socket.emit('test_response', { message: 'Conexión WebSocket funcionando correctamente', timestamp: new Date().toISOString() })
+      })
+
+      socket.on('disconnect', (reason) => {
+        console.log('🔴 Cliente desconectado:', socket.id, 'Razón:', reason)
       })
     })
+  }
+
+  // Enviar datos iniciales cuando un cliente se conecta
+  private async sendInitialData(socket: any, requestData: any) {
+    try {
+      // Aquí puedes llamar directamente a MongoDB para obtener datos recientes
+      const Reading = (await import('../models/readings.js')).default
+
+      const { deviceIds, limit = 10 } = requestData
+
+      let query: any = {}
+      if (deviceIds && Array.isArray(deviceIds)) {
+        query.deviceId = { $in: deviceIds.map((id: any) => id.toString()) }
+      }
+
+      // Obtener últimas lecturas por dispositivo
+      const recentReadings = await Reading.aggregate([
+        { $match: query },
+        { $sort: { timestamp: -1 } },
+        {
+          $group: {
+            _id: '$deviceId',
+            readings: { $push: '$$ROOT' },
+            lastReading: { $first: '$$ROOT' }
+          }
+        },
+        {
+          $project: {
+            deviceId: '$_id',
+            readings: { $slice: ['$readings', limit] },
+            lastReading: 1,
+            _id: 0
+          }
+        }
+      ])
+
+      // Enviar datos iniciales al cliente específico
+      socket.emit('initial_data', {
+        type: 'sensor_readings',
+        data: recentReadings,
+        timestamp: new Date().toISOString(),
+        message: 'Datos iniciales enviados'
+      })
+
+      console.log(`📊 Datos iniciales enviados a cliente: ${socket.id}`)
+    } catch (error) {
+      console.error('❌ Error enviando datos iniciales:', error)
+      socket.emit('error', {
+        type: 'initial_data_error',
+        message: 'Error al obtener datos iniciales',
+        timestamp: new Date().toISOString()
+      })
+    }
   }
 
   // Emitir cambio de estado a todos los clientes conectados
@@ -292,6 +369,64 @@ class WebSocketService {
   // Obtener número de clientes conectados
   getConnectedClients(): number {
     return this.io ? this.io.engine.clientsCount : 0
+  }
+
+  // Emitir cambios generales en la base de datos
+  emitDatabaseChange(changeData: any) {
+    if (!this.io) {
+      console.warn('WebSocket no inicializado')
+      return
+    }
+
+    console.log('📡 Emitiendo cambio en BD:', changeData.type)
+    
+    this.io.emit('database_change', {
+      timestamp: new Date().toISOString(),
+      ...changeData
+    })
+  }
+
+  // Emitir nueva lectura de sensor
+  emitNewSensorReading(readingData: any) {
+    if (!this.io) {
+      console.warn('WebSocket no inicializado')
+      return
+    }
+
+    console.log('📊 Emitiendo nueva lectura de sensor:', readingData.sensorType)
+    
+    // Emitir a todos los clientes
+    this.io.emit('new_sensor_reading', {
+      timestamp: new Date().toISOString(),
+      ...readingData
+    })
+
+    // Emitir a canal específico del dispositivo (solo clientes suscritos)
+    this.io.to(`device_${readingData.deviceId}`).emit('device_reading', {
+      timestamp: new Date().toISOString(),
+      ...readingData
+    })
+
+    // También mantener compatibilidad con el evento anterior
+    this.io.emit(`device_${readingData.deviceId}_reading`, {
+      timestamp: new Date().toISOString(),
+      ...readingData
+    })
+  }
+
+  // Emitir nuevo dispositivo
+  emitNewDevice(deviceData: any) {
+    if (!this.io) {
+      console.warn('WebSocket no inicializado')
+      return
+    }
+
+    console.log('🆕 Emitiendo nuevo dispositivo:', deviceData.name)
+    
+    this.io.emit('new_device', {
+      timestamp: new Date().toISOString(),
+      ...deviceData
+    })
   }
 }
 

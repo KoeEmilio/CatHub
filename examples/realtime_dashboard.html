@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CatHub - Real-time Dashboard</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: white;
+            font-size: 12px;
+        }
+        .status.connected { background-color: #4CAF50; }
+        .status.disconnected { background-color: #f44336; }
+        .event {
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #2196F3;
+            background-color: #f8f9fa;
+            font-size: 14px;
+        }
+        .event.reading { border-color: #4CAF50; }
+        .event.status { border-color: #FF9800; }
+        .event.device { border-color: #9C27B0; }
+        .timestamp {
+            color: #666;
+            font-size: 12px;
+        }
+        #events {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        button {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1976D2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐱 CatHub - Dashboard en Tiempo Real</h1>
+        
+        <div class="card">
+            <h3>Estado de Conexión</h3>
+            <span id="connectionStatus" class="status disconnected">Desconectado</span>
+            <button onclick="toggleConnection()">Reconectar</button>
+            <button onclick="clearEvents()">Limpiar Eventos</button>
+        </div>
+
+        <div class="card">
+            <h3>📊 Estadísticas</h3>
+            <p>Eventos recibidos: <span id="eventCount">0</span></p>
+            <p>Última actividad: <span id="lastActivity">-</span></p>
+            <p>Lecturas de sensores: <span id="readingCount">0</span></p>
+            <p>Cambios de estado: <span id="statusCount">0</span></p>
+        </div>
+
+        <div class="card">
+            <h3>🔔 Eventos en Tiempo Real</h3>
+            <div id="events"></div>
+        </div>
+    </div>
+
+    <script>
+        class CatHubDashboard {
+            constructor() {
+                this.socket = null;
+                this.eventCount = 0;
+                this.readingCount = 0;
+                this.statusCount = 0;
+                this.init();
+            }
+
+            init() {
+                this.connect();
+                this.updateUI();
+            }
+
+            connect() {
+                // Cambiar por tu IP del servidor
+                this.socket = io('http://192.168.254.193:3333');
+
+                this.socket.on('connect', () => {
+                    console.log('✅ Conectado al servidor WebSocket');
+                    this.updateConnectionStatus(true);
+                    this.addEvent('🟢 Conectado al servidor', 'system');
+                });
+
+                this.socket.on('disconnect', () => {
+                    console.log('❌ Desconectado del servidor WebSocket');
+                    this.updateConnectionStatus(false);
+                    this.addEvent('🔴 Desconectado del servidor', 'system');
+                });
+
+                this.socket.on('connect_error', (error) => {
+                    console.error('❌ Error de conexión:', error);
+                    this.addEvent(`❌ Error de conexión: ${error.message}`, 'error');
+                });
+
+                // Escuchar cambios generales en la base de datos
+                this.socket.on('database_change', (data) => {
+                    console.log('📡 Cambio en BD:', data);
+                    this.handleDatabaseChange(data);
+                });
+
+                // Escuchar nuevas lecturas de sensores
+                this.socket.on('new_sensor_reading', (data) => {
+                    console.log('📊 Nueva lectura:', data);
+                    this.handleNewSensorReading(data);
+                });
+
+                // Escuchar cambios de estado
+                this.socket.on('status_change', (data) => {
+                    console.log('🔄 Cambio de estado:', data);
+                    this.handleStatusChange(data);
+                });
+
+                // Escuchar nuevos dispositivos
+                this.socket.on('new_device', (data) => {
+                    console.log('🆕 Nuevo dispositivo:', data);
+                    this.handleNewDevice(data);
+                });
+
+                // Escuchar alertas críticas
+                this.socket.on('critical_alert', (data) => {
+                    console.log('⚠️ Alerta crítica:', data);
+                    this.handleCriticalAlert(data);
+                });
+            }
+
+            disconnect() {
+                if (this.socket) {
+                    this.socket.disconnect();
+                }
+            }
+
+            reconnect() {
+                this.disconnect();
+                setTimeout(() => this.connect(), 1000);
+            }
+
+            handleDatabaseChange(data) {
+                this.eventCount++;
+                
+                const eventType = data.type;
+                let message = '';
+                let cssClass = '';
+
+                switch (eventType) {
+                    case 'reading_inserted':
+                        message = `📊 Nueva lectura: ${data.data.sensorType} = ${data.data.value}${data.data.unit || ''} (Dispositivo: ${data.data.deviceId})`;
+                        cssClass = 'reading';
+                        this.readingCount++;
+                        break;
+                    case 'device_environment_updated':
+                        message = `🔄 Estado actualizado: ${data.data.alias} → ${data.data.status}`;
+                        cssClass = 'status';
+                        this.statusCount++;
+                        break;
+                    case 'device_inserted':
+                        message = `🆕 Nuevo dispositivo: ${data.data.name}`;
+                        cssClass = 'device';
+                        break;
+                    default:
+                        message = `🔄 Cambio en ${data.collection}: ${eventType}`;
+                        cssClass = 'general';
+                }
+
+                this.addEvent(message, cssClass, data.timestamp);
+                this.updateUI();
+            }
+
+            handleNewSensorReading(data) {
+                const message = `📊 Lectura de ${data.sensorType}: ${data.value}${data.unit || ''} (Dispositivo: ${data.deviceId})`;
+                this.addEvent(message, 'reading', data.timestamp);
+            }
+
+            handleStatusChange(data) {
+                const message = `🔄 ${data.alias}: ${data.previousStatus} → ${data.newStatus}`;
+                this.addEvent(message, 'status', data.timestamp);
+            }
+
+            handleNewDevice(data) {
+                const message = `🆕 Dispositivo registrado: ${data.name}`;
+                this.addEvent(message, 'device', data.timestamp);
+            }
+
+            handleCriticalAlert(data) {
+                const message = `⚠️ ALERTA: ${data.message}`;
+                this.addEvent(message, 'alert', data.timestamp);
+                
+                // Mostrar notificación del navegador si está permitido
+                if (Notification.permission === 'granted') {
+                    new Notification('CatHub - Alerta Crítica', {
+                        body: data.message,
+                        icon: '🐱'
+                    });
+                }
+            }
+
+            addEvent(message, type = 'general', timestamp = null) {
+                const eventsContainer = document.getElementById('events');
+                const eventElement = document.createElement('div');
+                eventElement.className = `event ${type}`;
+                
+                const time = timestamp ? new Date(timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+                
+                eventElement.innerHTML = `
+                    <div>${message}</div>
+                    <div class="timestamp">${time}</div>
+                `;
+                
+                eventsContainer.insertBefore(eventElement, eventsContainer.firstChild);
+                
+                // Limitar a 50 eventos máximo
+                while (eventsContainer.children.length > 50) {
+                    eventsContainer.removeChild(eventsContainer.lastChild);
+                }
+
+                document.getElementById('lastActivity').textContent = time;
+            }
+
+            updateConnectionStatus(connected) {
+                const statusElement = document.getElementById('connectionStatus');
+                statusElement.textContent = connected ? 'Conectado' : 'Desconectado';
+                statusElement.className = `status ${connected ? 'connected' : 'disconnected'}`;
+            }
+
+            updateUI() {
+                document.getElementById('eventCount').textContent = this.eventCount;
+                document.getElementById('readingCount').textContent = this.readingCount;
+                document.getElementById('statusCount').textContent = this.statusCount;
+            }
+
+            clearEvents() {
+                document.getElementById('events').innerHTML = '';
+                this.eventCount = 0;
+                this.readingCount = 0;
+                this.statusCount = 0;
+                this.updateUI();
+            }
+        }
+
+        // Funciones globales para los botones
+        let dashboard;
+
+        function toggleConnection() {
+            dashboard.reconnect();
+        }
+
+        function clearEvents() {
+            dashboard.clearEvents();
+        }
+
+        // Inicializar cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', () => {
+            dashboard = new CatHubDashboard();
+            
+            // Solicitar permisos para notificaciones
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        });
+    </script>
+</body>
+</html>

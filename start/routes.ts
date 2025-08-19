@@ -75,6 +75,10 @@ router.group(() => {
 // Rutas de lecturas (readings)
 router.group(() => {
   router.post('/', [ReadingsController, 'store']) // Sin auth para que Arduino pueda enviar datos
+  router.get('/latest', [ReadingsController, 'getLatestReadings']).use(middleware.auth()) // Últimas 5 lecturas
+  router.get('/recent', [ReadingsController, 'getRecentReadings']).use(middleware.auth()) // Últimas N lecturas configurables
+  router.get('/dashboard', [ReadingsController, 'getDashboardData']).use(middleware.auth()) // Datos del dashboard
+  router.get('/realtime/:deviceId', [ReadingsController, 'getRealtimeReadings']).use(middleware.auth()) // Datos en tiempo real
   router.get('/device/:deviceId', [ReadingsController, 'index']).use(middleware.auth())
   router.get('/device/:deviceId/range', [ReadingsController, 'getByDateRange']).use(middleware.auth())
   router.get('/device/:deviceId/stats', [ReadingsController, 'getStats']).use(middleware.auth())

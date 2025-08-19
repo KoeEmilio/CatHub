@@ -6,10 +6,15 @@ export interface ReadingDocument extends Document {
   value: number
   timestamp: Date
   deviceId: string
+  sensorId?: string // Opcional
 }
 
 const readingSchema = new Schema({
-  
+  sensorName: {
+    type: String,
+    required: true,
+    trim: true
+  },
   identifier: {
     type: String,
     required: true,
@@ -31,7 +36,7 @@ const readingSchema = new Schema({
   },
   sensorId: {
     type: String,
-    required: true,
+    required: false, // Hacer opcional para compatibilidad
     trim: true
   }
 }, {

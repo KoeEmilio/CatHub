@@ -1,5 +1,22 @@
 /*
-|--------------------------------------------------------------------------
+|---------------------------------    // Configurar WebSocket y MongoDB Change Streams después de que la aplicación esté lista
+    app.ready(async () => {
+      const WebSocketService = await import('../app/services/websocket_service.js')
+      const MongoChangeStreamService = await import('../app/services/mongo_change_stream_service.js')
+      
+      const httpServer = await app.container.make('server')
+      const nodeServer = httpServer.getNodeServer()
+      
+      if (nodeServer) {
+        // Inicializar WebSocket
+        WebSocketService.default.initialize(nodeServer)
+        console.log('🚀 WebSocket server initialized')
+        
+        // Inicializar MongoDB Change Streams
+        await MongoChangeStreamService.default.getInstance().initialize()
+        console.log('🔄 MongoDB Change Streams initialized')
+      }
+    })-------------------------------
 | HTTP server entrypoint
 |--------------------------------------------------------------------------
 |
@@ -38,12 +55,28 @@ new Ignitor(APP_ROOT, { importer: IMPORTER })
     // Configurar WebSocket después de que la aplicación esté lista
     app.ready(async () => {
       const WebSocketService = await import('../app/services/websocket_service.js')
+      const MongoChangeStreamService = await import('../app/services/mongo_change_stream_service.js')
+      
       const httpServer = await app.container.make('server')
       const nodeServer = httpServer.getNodeServer()
+      
       if (nodeServer) {
+        // Inicializar WebSocket
         WebSocketService.default.initialize(nodeServer)
         console.log('🚀 WebSocket server initialized')
+        
+        // Inicializar MongoDB Change Streams
+        await MongoChangeStreamService.default.getInstance().initialize()
+        console.log('🔄 MongoDB Change Streams initialized')
       }
+    })
+    
+    // Configurar limpieza de recursos al cerrar la aplicación
+    app.terminating(async () => {
+      console.log('🔄 Cerrando servicios...')
+      const MongoChangeStreamService = await import('../app/services/mongo_change_stream_service.js')
+      await MongoChangeStreamService.default.getInstance().close()
+      console.log('✅ Servicios cerrados correctamente')
     })
     
     app.listen('SIGTERM', () => app.terminate())
