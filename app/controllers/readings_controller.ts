@@ -1018,4 +1018,374 @@ export default class ReadingsController {
       })
     }
   }
+
+  /**
+   * 📊 Obtener datos de sensores por dispositivo para tiempo real
+   * Ruta optimizada para frontend - trae últimas lecturas agrupadas por sensor
+   */
+  public async getSensorDataByDevice({ params, request, auth, response }: HttpContext) {
+    try {
+      const user = auth.user
+      if (!user) {
+        return response.unauthorized({ message: 'No autenticado' })
+      }
+
+      const { deviceId } = params
+      const { 
+        limit = 50,           // Número máximo de lecturas por sensor
+        hours = 24,           // Horas hacia atrás para consultar
+        groupBy = 'sensor',   // 'sensor' o 'time'
+        includeStats = false  // Incluir estadísticas (min, max, avg)
+      } = request.qs()
+
+      // Verificar que el usuario tiene acceso al dispositivo
+      const deviceAccess = await this.verifyDeviceAccess(deviceId, user.id)
+      if (!deviceAccess.hasAccess) {
+        return response.status(deviceAccess.status || 500).json({
+          status: 'error',
+          message: deviceAccess.message
+        })
+      }
+
+      // Calcular timestamp desde hace X horas
+      const hoursAgo = new Date()
+      hoursAgo.setHours(hoursAgo.getHours() - parseInt(hours))
+
+      // Pipeline de agregación para obtener datos agrupados por sensor
+      const pipeline: any[] = [
+        {
+          $match: {
+            deviceId: deviceId.toString(),
+            timestamp: { $gte: hoursAgo }
+          }
+        },
+        {
+          $sort: { timestamp: -1 }
+        }
+      ]
+
+      if (groupBy === 'sensor') {
+        // Agrupar por sensor y tomar las últimas N lecturas de cada uno
+        pipeline.push({
+          $group: {
+            _id: '$sensorName',
+            readings: {
+              $push: {
+                value: '$value',
+                timestamp: '$timestamp',
+                identifier: '$identifier'
+              }
+            },
+            lastReading: { $first: '$$ROOT' },
+            totalReadings: { $sum: 1 }
+          }
+        })
+
+        // Limitar lecturas por sensor
+        pipeline.push({
+          $project: {
+            sensorName: '$_id',
+            readings: { $slice: ['$readings', parseInt(limit)] },
+            lastValue: '$lastReading.value',
+            lastTimestamp: '$lastReading.timestamp',
+            lastIdentifier: '$lastReading.identifier',
+            totalReadings: 1,
+            _id: 0
+          }
+        })
+
+        // Si se solicitan estadísticas
+        if (includeStats === 'true') {
+          pipeline.splice(-1, 0, {
+            $addFields: {
+              stats: {
+                $let: {
+                  vars: {
+                    values: '$readings.value'
+                  },
+                  in: {
+                    min: { $min: '$$values' },
+                    max: { $max: '$$values' },
+                    avg: { $avg: '$$values' },
+                    count: { $size: '$$values' }
+                  }
+                }
+              }
+            }
+          })
+        }
+      } else {
+        // Agrupar por tiempo (para gráficos temporales)
+        pipeline.push({
+          $group: {
+            _id: {
+              sensor: '$sensorName',
+              hour: {
+                $dateToString: {
+                  format: '%Y-%m-%d %H:00:00',
+                  date: '$timestamp'
+                }
+              }
+            },
+            avgValue: { $avg: '$value' },
+            minValue: { $min: '$value' },
+            maxValue: { $max: '$value' },
+            count: { $sum: 1 },
+            readings: {
+              $push: {
+                value: '$value',
+                timestamp: '$timestamp',
+                identifier: '$identifier'
+              }
+            }
+          }
+        })
+
+        pipeline.push({
+          $project: {
+            sensorName: '$_id.sensor',
+            hour: '$_id.hour',
+            avgValue: { $round: ['$avgValue', 2] },
+            minValue: '$minValue',
+            maxValue: '$maxValue',
+            count: '$count',
+            readings: { $slice: ['$readings', 10] }, // Máximo 10 readings por hora
+            _id: 0
+          }
+        })
+
+        pipeline.push({
+          $sort: { hour: -1 }
+        })
+      }
+
+      // Ejecutar la agregación
+      const sensorData = await Reading.aggregate(pipeline)
+
+      // Obtener información adicional del dispositivo
+      const deviceInfo = await Device.query()
+        .where('id', deviceId)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment')
+            .select(['id', 'alias', 'type', 'status'])
+        })
+        .select(['id', 'name'])
+        .first()
+
+      // Obtener sensores únicos para este dispositivo
+      const uniqueSensors = await Reading.distinct('sensorName', {
+        deviceId: deviceId.toString()
+      })
+
+      // Estadísticas generales
+      const totalReadings = await Reading.countDocuments({
+        deviceId: deviceId.toString(),
+        timestamp: { $gte: hoursAgo }
+      })
+
+      const oldestReading = await Reading.findOne({
+        deviceId: deviceId.toString()
+      }).sort({ timestamp: 1 })
+
+      const newestReading = await Reading.findOne({
+        deviceId: deviceId.toString()
+      }).sort({ timestamp: -1 })
+
+      return response.ok({
+        status: 'success',
+        data: {
+          deviceId: parseInt(deviceId),
+          deviceInfo: {
+            id: deviceInfo?.id,
+            name: deviceInfo?.name,
+            deviceEnvirs: deviceInfo?.deviceEnvirs || []
+          },
+          sensorData: sensorData,
+          metadata: {
+            uniqueSensors: uniqueSensors,
+            totalReadings: totalReadings,
+            queryParams: {
+              limit: parseInt(limit),
+              hours: parseInt(hours),
+              groupBy: groupBy,
+              includeStats: includeStats === 'true'
+            },
+            timeRange: {
+              from: hoursAgo.toISOString(),
+              to: new Date().toISOString()
+            },
+            dataRange: {
+              oldest: oldestReading?.timestamp,
+              newest: newestReading?.timestamp
+            }
+          }
+        },
+        timestamp: new Date().toISOString()
+      })
+
+    } catch (error) {
+      console.error('Error obteniendo datos de sensores por dispositivo:', error)
+      return response.status(500).json({
+        status: 'error',
+        message: 'Error al obtener datos de sensores',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      })
+    }
+  }
+
+  /**
+   * 📈 Obtener resumen rápido de sensores para dashboard
+   * Versión ligera para actualizaciones frecuentes
+   */
+  public async getDeviceSensorSummary({ params, request, auth, response }: HttpContext) {
+    try {
+      const user = auth.user
+      if (!user) {
+        return response.unauthorized({ message: 'No autenticado' })
+      }
+
+      const { deviceId } = params
+      const { minutes = 30 } = request.qs() // Por defecto últimos 30 minutos
+
+      // Verificar acceso al dispositivo
+      const deviceAccess = await this.verifyDeviceAccess(deviceId, user.id)
+      if (!deviceAccess.hasAccess) {
+        return response.status(deviceAccess.status || 500).json({
+          status: 'error',
+          message: deviceAccess.message
+        })
+      }
+
+      // Timestamp desde hace X minutos
+      const minutesAgo = new Date()
+      minutesAgo.setMinutes(minutesAgo.getMinutes() - parseInt(minutes))
+
+      // Pipeline optimizado para resumen rápido
+      const summaryData = await Reading.aggregate([
+        {
+          $match: {
+            deviceId: deviceId.toString(),
+            timestamp: { $gte: minutesAgo }
+          }
+        },
+        {
+          $sort: { timestamp: -1 }
+        },
+        {
+          $group: {
+            _id: '$sensorName',
+            lastValue: { $first: '$value' },
+            lastTimestamp: { $first: '$timestamp' },
+            lastIdentifier: { $first: '$identifier' },
+            readingsCount: { $sum: 1 },
+            minValue: { $min: '$value' },
+            maxValue: { $max: '$value' },
+            avgValue: { $avg: '$value' }
+          }
+        },
+        {
+          $project: {
+            sensorName: '$_id',
+            lastValue: 1,
+            lastTimestamp: 1,
+            lastIdentifier: 1,
+            readingsCount: 1,
+            minValue: 1,
+            maxValue: 1,
+            avgValue: { $round: ['$avgValue', 2] },
+            isActive: {
+              $gt: [
+                '$lastTimestamp',
+                {
+                  $subtract: [new Date(), 5 * 60 * 1000] // Activo si hay lectura en últimos 5 minutos
+                }
+              ]
+            },
+            _id: 0
+          }
+        },
+        {
+          $sort: { lastTimestamp: -1 }
+        }
+      ])
+
+      return response.ok({
+        status: 'success',
+        data: {
+          deviceId: parseInt(deviceId),
+          sensors: summaryData,
+          summary: {
+            totalSensors: summaryData.length,
+            activeSensors: summaryData.filter(s => s.isActive).length,
+            totalReadings: summaryData.reduce((sum, s) => sum + s.readingsCount, 0),
+            timeRange: {
+              minutes: parseInt(minutes),
+              from: minutesAgo.toISOString(),
+              to: new Date().toISOString()
+            }
+          }
+        },
+        timestamp: new Date().toISOString()
+      })
+
+    } catch (error) {
+      console.error('Error obteniendo resumen de sensores:', error)
+      return response.status(500).json({
+        status: 'error',
+        message: 'Error al obtener resumen de sensores',
+        error: error.message
+      })
+    }
+  }
+
+  /**
+   * 🔒 Verificar si el usuario tiene acceso a un dispositivo
+   * Función auxiliar reutilizable
+   */
+  private async verifyDeviceAccess(deviceId: string, userId: number) {
+    try {
+      const device = await Device.query()
+        .where('id', deviceId)
+        .preload('deviceEnvirs', (query) => {
+          query.preload('environment', (envQuery) => {
+            envQuery.where('id_user', userId)
+          })
+        })
+        .first()
+
+      if (!device) {
+        return {
+          hasAccess: false,
+          status: 404,
+          message: 'Dispositivo no encontrado'
+        }
+      }
+
+      // Verificar si al menos una relación pertenece al usuario
+      const hasAccess = device.deviceEnvirs.some(deviceEnvir => 
+        deviceEnvir.environment && deviceEnvir.environment.idUser === userId
+      )
+
+      if (!hasAccess) {
+        return {
+          hasAccess: false,
+          status: 403,
+          message: 'No tienes permisos para acceder a este dispositivo'
+        }
+      }
+
+      return {
+        hasAccess: true,
+        device: device
+      }
+
+    } catch (error) {
+      return {
+        hasAccess: false,
+        status: 500,
+        message: 'Error verificando acceso al dispositivo'
+      }
+    }
+  }
 }

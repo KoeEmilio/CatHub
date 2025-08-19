@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CatHub - Test API Sensores</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .api-section {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .api-section h4 {
+            margin-top: 0;
+            color: #0066cc;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 10px 0;
+        }
+        
+        input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        .response-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .response-box.error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        
+        .response-box.success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        
+        .sensor-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px;
+            display: inline-block;
+            min-width: 200px;
+        }
+        
+        .sensor-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        
+        .realtime-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        
+        .realtime-indicator.active {
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+        
+        .realtime-indicator.inactive {
+            background-color: #dc3545;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .url-example {
+            background-color: #e9ecef;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐱 CatHub - Test API de Sensores</h1>
+        <p>Prueba las nuevas rutas optimizadas para el frontend en tiempo real</p>
+        
+        <div class="controls">
+            <label>Token de Autenticación:</label>
+            <input type="text" id="authToken" placeholder="Ingresa tu JWT token" style="width: 300px;">
+            <label>Device ID:</label>
+            <input type="number" id="deviceId" value="1" min="1">
+            <button onclick="testLogin()">🔑 Login de Prueba</button>
+        </div>
+    </div>
+
+    <!-- API 1: Datos Completos de Sensores -->
+    <div class="container">
+        <div class="api-section">
+            <h4>📊 1. Datos Completos de Sensores por Dispositivo</h4>
+            <div class="url-example">GET /api/readings/device/{deviceId}/sensors</div>
+            
+            <div class="controls">
+                <label>Límite por sensor:</label>
+                <input type="number" id="limit" value="20" min="1" max="100">
+                
+                <label>Horas atrás:</label>
+                <input type="number" id="hours" value="24" min="1" max="168">
+                
+                <label>Agrupar por:</label>
+                <select id="groupBy">
+                    <option value="sensor">Sensor</option>
+                    <option value="time">Tiempo</option>
+                </select>
+                
+                <label>
+                    <input type="checkbox" id="includeStats"> Incluir estadísticas
+                </label>
+                
+                <button onclick="getSensorData()">🔍 Obtener Datos</button>
+            </div>
+            
+            <div id="sensorDataResponse" class="response-box"></div>
+        </div>
+    </div>
+
+    <!-- API 2: Resumen Rápido -->
+    <div class="container">
+        <div class="api-section">
+            <h4>⚡ 2. Resumen Rápido de Sensores</h4>
+            <div class="url-example">GET /api/readings/device/{deviceId}/sensors/summary</div>
+            
+            <div class="controls">
+                <label>Minutos atrás:</label>
+                <input type="number" id="minutes" value="30" min="1" max="1440">
+                
+                <button onclick="getSensorSummary()">⚡ Resumen Rápido</button>
+                <button onclick="startAutoRefresh()">🔄 Auto-refresh (30s)</button>
+                <button onclick="stopAutoRefresh()">⏹️ Detener</button>
+            </div>
+            
+            <div id="sensorSummaryResponse" class="response-box"></div>
+            <div id="sensorCards" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+
+    <!-- WebSocket en Tiempo Real -->
+    <div class="container">
+        <div class="api-section">
+            <h4>🔴 3. WebSocket - Datos en Tiempo Real</h4>
+            
+            <div class="controls">
+                <button onclick="connectWebSocket()">🔌 Conectar WebSocket</button>
+                <button onclick="subscribeToDevice()">📡 Suscribirse al Dispositivo</button>
+                <button onclick="sendTestReading()">📤 Simular Lectura</button>
+            </div>
+            
+            <div id="websocketStatus">❌ Desconectado</div>
+            <div id="websocketResponse" class="response-box"></div>
+        </div>
+    </div>
+
+    <script>
+        let socket;
+        let autoRefreshInterval;
+        const API_BASE = 'http://127.0.0.1:3333/api';
+
+        // Función para hacer peticiones con autenticación
+        async function apiRequest(endpoint, options = {}) {
+            const token = document.getElementById('authToken').value;
+            
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    ...options.headers
+                }
+            });
+
+            return response;
+        }
+
+        // Login de prueba (necesitas implementar esto según tu sistema)
+        async function testLogin() {
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'password'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.token) {
+                    document.getElementById('authToken').value = data.token;
+                    alert('✅ Login exitoso');
+                } else {
+                    alert('❌ Error en login: ' + (data.message || 'Error desconocido'));
+                }
+            } catch (error) {
+                alert('❌ Error de conexión: ' + error.message);
+            }
+        }
+
+        // 1. Obtener datos completos de sensores
+        async function getSensorData() {
+            try {
+                const deviceId = document.getElementById('deviceId').value;
+                const limit = document.getElementById('limit').value;
+                const hours = document.getElementById('hours').value;
+                const groupBy = document.getElementById('groupBy').value;
+                const includeStats = document.getElementById('includeStats').checked;
+
+                const url = `/readings/device/${deviceId}/sensors?limit=${limit}&hours=${hours}&groupBy=${groupBy}&includeStats=${includeStats}`;
+                
+                const response = await apiRequest(url);
+                const data = await response.json();
+
+                const responseBox = document.getElementById('sensorDataResponse');
+                
+                if (response.ok) {
+                    responseBox.className = 'response-box success';
+                    responseBox.textContent = JSON.stringify(data, null, 2);
+                } else {
+                    responseBox.className = 'response-box error';
+                    responseBox.textContent = JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                const responseBox = document.getElementById('sensorDataResponse');
+                responseBox.className = 'response-box error';
+                responseBox.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // 2. Obtener resumen rápido
+        async function getSensorSummary() {
+            try {
+                const deviceId = document.getElementById('deviceId').value;
+                const minutes = document.getElementById('minutes').value;
+
+                const url = `/readings/device/${deviceId}/sensors/summary?minutes=${minutes}`;
+                
+                const response = await apiRequest(url);
+                const data = await response.json();
+
+                const responseBox = document.getElementById('sensorSummaryResponse');
+                
+                if (response.ok) {
+                    responseBox.className = 'response-box success';
+                    responseBox.textContent = JSON.stringify(data, null, 2);
+                    
+                    // Mostrar tarjetas de sensores
+                    displaySensorCards(data.data.sensors);
+                } else {
+                    responseBox.className = 'response-box error';
+                    responseBox.textContent = JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                const responseBox = document.getElementById('sensorSummaryResponse');
+                responseBox.className = 'response-box error';
+                responseBox.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Mostrar tarjetas visuales de sensores
+        function displaySensorCards(sensors) {
+            const cardsContainer = document.getElementById('sensorCards');
+            cardsContainer.innerHTML = '';
+
+            sensors.forEach(sensor => {
+                const card = document.createElement('div');
+                card.className = 'sensor-card';
+                
+                const indicatorClass = sensor.isActive ? 'active' : 'inactive';
+                const lastTime = new Date(sensor.lastTimestamp).toLocaleTimeString();
+                
+                card.innerHTML = `
+                    <div>
+                        <span class="realtime-indicator ${indicatorClass}"></span>
+                        <strong>${sensor.sensorName}</strong>
+                    </div>
+                    <div class="sensor-value">${sensor.lastValue}</div>
+                    <div style="font-size: 0.8em; margin-top: 5px;">
+                        Última lectura: ${lastTime}<br>
+                        Rango: ${sensor.minValue} - ${sensor.maxValue}<br>
+                        Promedio: ${sensor.avgValue}
+                    </div>
+                `;
+                
+                cardsContainer.appendChild(card);
+            });
+        }
+
+        // Auto-refresh del resumen
+        function startAutoRefresh() {
+            stopAutoRefresh(); // Detener cualquier intervalo existente
+            
+            getSensorSummary(); // Primera carga
+            
+            autoRefreshInterval = setInterval(() => {
+                getSensorSummary();
+            }, 30000); // Cada 30 segundos
+            
+            alert('✅ Auto-refresh iniciado (cada 30 segundos)');
+        }
+
+        function stopAutoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                alert('⏹️ Auto-refresh detenido');
+            }
+        }
+
+        // 3. WebSocket en tiempo real
+        function connectWebSocket() {
+            socket = io('http://127.0.0.1:3333');
+
+            socket.on('connect', () => {
+                document.getElementById('websocketStatus').textContent = '✅ Conectado';
+                addWebSocketMessage('🟢 Conectado al servidor WebSocket');
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('websocketStatus').textContent = '❌ Desconectado';
+                addWebSocketMessage('🔴 Desconectado del servidor');
+            });
+
+            socket.on('new_sensor_reading', (data) => {
+                addWebSocketMessage(`📊 Nueva lectura: ${data.sensorType} = ${data.value} (Dispositivo: ${data.deviceId})`);
+                
+                // Actualizar automáticamente el resumen si está visible
+                if (data.deviceId == document.getElementById('deviceId').value) {
+                    getSensorSummary();
+                }
+            });
+
+            socket.on('database_change', (data) => {
+                if (data.type === 'reading_inserted') {
+                    addWebSocketMessage(`🔄 BD actualizada: ${data.data.sensorType} insertado`);
+                }
+            });
+        }
+
+        function subscribeToDevice() {
+            if (!socket || !socket.connected) {
+                alert('❌ Conecta al WebSocket primero');
+                return;
+            }
+
+            const deviceId = document.getElementById('deviceId').value;
+            socket.emit('subscribe_device', deviceId);
+            addWebSocketMessage(`📡 Suscrito al dispositivo ${deviceId}`);
+        }
+
+        function sendTestReading() {
+            // Simular envío de lectura via API (como haría Arduino)
+            const deviceId = document.getElementById('deviceId').value;
+            const testReading = {
+                sensorName: 'temperatura',
+                identifier: 'test_sensor_001',
+                value: Math.round((Math.random() * 30 + 15) * 100) / 100, // 15-45°C
+                deviceId: deviceId
+            };
+
+            fetch(`${API_BASE}/readings`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(testReading)
+            })
+            .then(response => response.json())
+            .then(data => {
+                addWebSocketMessage(`📤 Lectura de prueba enviada: ${testReading.value}°C`);
+            })
+            .catch(error => {
+                addWebSocketMessage(`❌ Error enviando lectura: ${error.message}`);
+            });
+        }
+
+        function addWebSocketMessage(message) {
+            const responseBox = document.getElementById('websocketResponse');
+            const timestamp = new Date().toLocaleTimeString();
+            responseBox.textContent += `[${timestamp}] ${message}\n`;
+            responseBox.scrollTop = responseBox.scrollHeight;
+        }
+
+        // Limpiar al cargar la página
+        window.addEventListener('load', () => {
+            document.getElementById('sensorDataResponse').textContent = 'Haz clic en "Obtener Datos" para probar la API...';
+            document.getElementById('sensorSummaryResponse').textContent = 'Haz clic en "Resumen Rápido" para probar la API...';
+            document.getElementById('websocketResponse').textContent = 'Conecta al WebSocket para ver mensajes en tiempo real...\n';
+        });
+    </script>
+</body>
+</html>
