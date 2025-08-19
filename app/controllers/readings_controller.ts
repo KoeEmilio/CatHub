@@ -1,9 +1,6 @@
 import { HttpContext } from '@adonisjs/core/http'
 import Reading from '../models/readings.js'
 import Device from '../models/device.js'
-import DeviceEnvir from '../models/device_envir.js'
-import DeviceSensor from '../models/device_sensor.js'
-import Sensor from '../models/sensor.js'
 
 export default class ReadingsController {
   /**
