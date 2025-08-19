@@ -9,25 +9,62 @@ export default class ReadingsController {
   /**
    * Crear una nueva lectura de sensor
    */
+    /**
+   * Crear una nueva lectura de sensor
+   */
   public async store({ request, response }: HttpContext) {
     try {
-      const data = request.only(['sensorName', 'identifier', 'value', 'deviceId'])
+      const data = request.only(['sensorName', 'identifier', 'value', 'deviceId', 'deviceEnvirId'])
       
-      // Validar datos
-      if (!data.sensorName || !data.identifier || data.value === undefined || !data.deviceId) {
+      // Validar datos mínimos
+      if (!data.sensorName || !data.identifier || data.value === undefined) {
         return response.status(400).json({
           status: 'error',
-          message: 'Todos los campos son obligatorios: sensorName, identifier, value, deviceId'
+          message: 'sensorName, identifier y value son obligatorios'
         })
       }
-
-      // Verificar que el dispositivo existe en PostgreSQL
-      const deviceExists = await Device.find(data.deviceId)
-      if (!deviceExists) {
-        return response.status(404).json({
+  
+      // Validar que se proporcione al menos deviceId o deviceEnvirId
+      if (!data.deviceId && !data.deviceEnvirId) {
+        return response.status(400).json({
           status: 'error',
-          message: 'El dispositivo especificado no existe'
+          message: 'Debe proporcionar deviceId o deviceEnvirId'
         })
+      }
+  
+      let deviceEnvirId = data.deviceEnvirId
+  
+      // Si se proporciona deviceId pero no deviceEnvirId, intentar encontrar el deviceEnvir
+      if (data.deviceId && !deviceEnvirId) {
+        const deviceEnvir = await DeviceEnvir.query()
+          .where('idDevice', data.deviceId)
+          .first()
+        
+        if (deviceEnvir) {
+          deviceEnvirId = deviceEnvir.id.toString()
+        }
+      }
+  
+      // Verificar que el device_environment existe si se proporciona
+      if (deviceEnvirId) {
+        const deviceEnvirExists = await DeviceEnvir.find(deviceEnvirId)
+        if (!deviceEnvirExists) {
+          return response.status(404).json({
+            status: 'error',
+            message: 'El device_environment especificado no existe'
+          })
+        }
+      }
+  
+      // Verificar que el dispositivo físico existe si se proporciona deviceId
+      if (data.deviceId) {
+        const deviceExists = await Device.find(data.deviceId)
+        if (!deviceExists) {
+          return response.status(404).json({
+            status: 'error',
+            message: 'El dispositivo especificado no existe'
+          })
+        }
       }
       
       // Crear lectura en MongoDB
@@ -36,15 +73,24 @@ export default class ReadingsController {
         identifier: data.identifier,
         value: data.value,
         deviceId: data.deviceId,
+        deviceEnvirId: deviceEnvirId, // Incluir la relación correcta
         timestamp: new Date()
       })
-
+  
       await reading.save()
       
       return response.status(201).json({
         status: 'success',
         message: 'Lectura registrada correctamente',
-        data: reading
+        data: {
+          id: reading._id,
+          sensorName: reading.sensorName,
+          identifier: reading.identifier,
+          value: reading.value,
+          deviceId: reading.deviceId,
+          deviceEnvirId: reading.deviceEnvirId,
+          timestamp: reading.timestamp
+        }
       })
     } catch (error) {
       console.error('Error al registrar lectura:', error)
@@ -55,7 +101,6 @@ export default class ReadingsController {
       })
     }
   }
-
   /**
    * Obtener lecturas de un dispositivo
    */
@@ -638,45 +683,46 @@ export default class ReadingsController {
    * Obtener las últimas 5 inserciones de readings
    * GET /readings/latest
    */
+    /**
+   * Obtener las últimas 5 inserciones de readings
+   * GET /readings/latest
+   */
   public async getLatestReadings({ auth, response }: HttpContext) {
     try {
       const user = auth.user
       if (!user) {
         return response.unauthorized({ message: 'No autenticado' })
       }
-
-      // Obtener dispositivos del usuario para filtrar las lecturas
-      const userDevices = await Device.query()
-        .preload('deviceEnvirs', (query) => {
-          query.preload('environment', (envQuery) => {
-            envQuery.where('id_user', user.id)
-          })
+  
+      // Obtener device_environments del usuario directamente
+      const userDeviceEnvirs = await DeviceEnvir.query()
+        .preload('environment', (envQuery) => {
+          envQuery.where('id_user', user.id)
         })
-
-      // Filtrar dispositivos que pertenecen al usuario
-      const authorizedDevices = userDevices.filter(device => 
-        device.deviceEnvirs.some(deviceEnvir => 
-          deviceEnvir.environment && deviceEnvir.environment.idUser === user.id
-        )
-      )
-
-      if (authorizedDevices.length === 0) {
+        .preload('device') // Cargar información del device para mostrar
+        .whereHas('environment', (envQuery) => {
+          envQuery.where('id_user', user.id)
+        })
+  
+      if (userDeviceEnvirs.length === 0) {
         return response.ok({
           status: 'success',
           data: {
             readings: [],
-            message: 'No tienes dispositivos registrados'
+            count: 0,
+            message: 'No tienes dispositivos registrados en tus environments'
           }
         })
       }
-
-      const userDeviceIds = authorizedDevices.map(d => d.id.toString())
-
-      // Obtener las últimas 5 lecturas de los dispositivos del usuario
+  
+      // Obtener los IDs de device_environments del usuario
+      const userDeviceEnvirIds = userDeviceEnvirs.map(deviceEnvir => deviceEnvir.id.toString())
+  
+      // Obtener las últimas 5 lecturas usando deviceEnvirId en lugar de deviceId
       let latestReadings
       try {
         latestReadings = await Reading.find({
-          deviceId: { $in: userDeviceIds }
+          deviceEnvirId: { $in: userDeviceEnvirIds } // Cambio clave: usar deviceEnvirId
         })
         .sort({ timestamp: -1 })
         .limit(5)
@@ -689,14 +735,14 @@ export default class ReadingsController {
         try {
           latestReadings = await Reading.find({})
             .sort({ timestamp: -1 })
-            .limit(5)
+            .limit(20) // Obtener más para filtrar después
             .maxTimeMS(10000)
             .lean()
             
           // Filtrar en JavaScript si MongoDB no responde bien
-          latestReadings = latestReadings.filter(reading => 
-            userDeviceIds.includes(reading.deviceId)
-          )
+          latestReadings = latestReadings
+            .filter(reading => userDeviceEnvirIds.includes(reading.deviceEnvirId))
+            .slice(0, 5) // Limitar a 5 después del filtro
         } catch (fallbackError) {
           console.error('Error en consulta de fallback:', fallbackError)
           return response.status(503).json({
@@ -706,32 +752,39 @@ export default class ReadingsController {
           })
         }
       }
-
-      // Enriquecer los datos con información del dispositivo
+  
+      // Enriquecer los datos con información del device_environment
       const enrichedReadings = latestReadings.map(reading => {
-        const device = authorizedDevices.find(d => d.id.toString() === reading.deviceId)
+        const deviceEnvir = userDeviceEnvirs.find(de => de.id.toString() === reading.deviceEnvirId)
         return {
           id: reading._id,
           sensorName: reading.sensorName,
           identifier: reading.identifier,
           value: reading.value,
           timestamp: reading.timestamp,
-          deviceId: reading.deviceId,
+          deviceEnvirId: reading.deviceEnvirId,
+          deviceId: reading.deviceId, // Mantener para compatibilidad
           device: {
-            id: device?.id,
-            name: device?.name,
-            alias: device?.deviceEnvirs[0]?.alias || device?.name,
-            type: device?.deviceEnvirs[0]?.type || 'unknown'
+            id: deviceEnvir?.device?.id,
+            name: deviceEnvir?.device?.name,
+            alias: deviceEnvir?.alias || deviceEnvir?.device?.name,
+            type: deviceEnvir?.type || 'unknown',
+            status: deviceEnvir?.status
+          },
+          environment: {
+            id: deviceEnvir?.environment?.id,
+            name: deviceEnvir?.environment?.name,
+            color: deviceEnvir?.environment?.color
           }
         }
       })
-
+  
       return response.ok({
         status: 'success',
         data: {
           readings: enrichedReadings,
           count: enrichedReadings.length,
-          message: `Últimas ${enrichedReadings.length} lecturas obtenidas`
+          message: `Últimas ${enrichedReadings.length} lecturas obtenidas de tus dispositivos`
         }
       })
     } catch (error) {
@@ -743,7 +796,6 @@ export default class ReadingsController {
       })
     }
   }
-
   /**
    * Obtener las últimas N lecturas (configurable)
    * GET /readings/recent?limit=10&deviceId=1

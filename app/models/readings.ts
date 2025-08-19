@@ -6,6 +6,7 @@ export interface ReadingDocument extends Document {
   value: number
   timestamp: Date
   deviceId: string
+  deviceEnvirId: string
   sensorId?: string // Opcional
 }
 
@@ -28,6 +29,11 @@ const readingSchema = new Schema({
     type: Date,
     required: true,
     default: Date.now
+  },
+  deviceEnvirId: {
+    type: String,
+    required: true,
+    trim: true
   },
   deviceId: {
     type: String,

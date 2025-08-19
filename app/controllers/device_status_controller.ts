@@ -70,7 +70,6 @@ export default class DeviceStatusController {
         type: deviceEnvir.type,
         previousStatus,
         newStatus: status,
-        apiKey: deviceEnvir.device.apiKey,
         timestamp: new Date().toISOString(),
         userId: user.id
       }
@@ -156,7 +155,6 @@ export default class DeviceStatusController {
           device: {
             id: deviceEnvir.device.id,
             name: deviceEnvir.device.name,
-            apiKey: deviceEnvir.device.apiKey
           },
           environment: {
             id: deviceEnvir.environment.id,
@@ -381,7 +379,6 @@ export default class DeviceStatusController {
         type: deviceEnvir.type,
         previousStatus,
         newStatus,
-        apiKey: deviceEnvir.device.apiKey,
         timestamp: new Date().toISOString(),
         userId: user.id
       }
