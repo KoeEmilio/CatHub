@@ -15,7 +15,6 @@ const LoginController = () => import('../app/controllers/Auth/login_controller.j
 const EnvironmentsController = () => import('../app/controllers/environments_controller.js')
 const DevicesController = () => import('../app/controllers/devices_controller.js')
 const ReadingsController = () => import('../app/controllers/readings_controller.js')
-const DeviceConfigController = () => import('../app/controllers/device_config_controller.js')
 const DeviceStatusController = () => import('../app/controllers/device_status_controller.js')
 const StatusesController = () => import('../app/controllers/statuses_controller.js')
 
@@ -88,12 +87,6 @@ router.group(() => {
 }).prefix('/api/readings')
 
 // Rutas para dispositivos (endpoints que consumen Arduino/Raspberry Pi)
-router.group(() => {
-  router.get('/config', [DeviceConfigController, 'getConfigurations'])
-  router.post('/config', [DeviceConfigController, 'updateConfiguration'])
-  router.post('/sensor-data', [DeviceConfigController, 'sendSensorData'])
-}).prefix('/api/device').use(middleware.deviceAuth())
-
 // Rutas de control de estado de dispositivos (IoT)
 router.group(() => {
   // Rutas generales de status
