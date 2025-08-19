@@ -1,0 +1,18 @@
+# Configuraciones alternativas de MongoDB para testing
+
+# URL actual (con replica set)
+MONGO_URL_REPLICA=mongodb://admin:admin123@www.atenasoficial.com:5000,18.217.230.121:1006/db_cathub?authSource=admin&replicaSet=rs0
+
+# URL simple (sin replica set - para testing)
+MONGO_URL_SIMPLE=mongodb://admin:admin123@www.atenasoficial.com:5000/db_cathub?authSource=admin
+
+# URL con opciones de timeout en la URL
+MONGO_URL_WITH_TIMEOUTS=mongodb://admin:admin123@www.atenasoficial.com:5000,18.217.230.121:1006/db_cathub?authSource=admin&replicaSet=rs0&serverSelectionTimeoutMS=60000&socketTimeoutMS=60000&connectTimeoutMS=60000
+
+# URL solo con el primer host (para testing)
+MONGO_URL_SINGLE_HOST=mongodb://admin:admin123@www.atenasoficial.com:5000/db_cathub?authSource=admin&replicaSet=rs0
+
+# Recomendación: Prueba estas URLs una por una en tu .env
+# 1. Primero prueba MONGO_URL_SIMPLE
+# 2. Si funciona, el problema es con el replica set
+# 3. Si no funciona, es un problema de conexión de red/credenciales

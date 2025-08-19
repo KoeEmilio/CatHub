@@ -673,12 +673,39 @@ export default class ReadingsController {
       const userDeviceIds = authorizedDevices.map(d => d.id.toString())
 
       // Obtener las últimas 5 lecturas de los dispositivos del usuario
-      const latestReadings = await Reading.find({
-        deviceId: { $in: userDeviceIds }
-      })
-      .sort({ timestamp: -1 })
-      .limit(5)
-      .lean()
+      let latestReadings
+      try {
+        latestReadings = await Reading.find({
+          deviceId: { $in: userDeviceIds }
+        })
+        .sort({ timestamp: -1 })
+        .limit(5)
+        .maxTimeMS(20000) // Timeout de 20 segundos
+        .lean()
+      } catch (timeoutError) {
+        console.warn('MongoDB timeout, intentando consulta más simple:', timeoutError)
+        
+        // Fallback: consulta más simple sin filtros complejos
+        try {
+          latestReadings = await Reading.find({})
+            .sort({ timestamp: -1 })
+            .limit(5)
+            .maxTimeMS(10000)
+            .lean()
+            
+          // Filtrar en JavaScript si MongoDB no responde bien
+          latestReadings = latestReadings.filter(reading => 
+            userDeviceIds.includes(reading.deviceId)
+          )
+        } catch (fallbackError) {
+          console.error('Error en consulta de fallback:', fallbackError)
+          return response.status(503).json({
+            status: 'error',
+            message: 'Base de datos temporalmente no disponible',
+            code: 'DATABASE_TIMEOUT'
+          })
+        }
+      }
 
       // Enriquecer los datos con información del dispositivo
       const enrichedReadings = latestReadings.map(reading => {
@@ -858,6 +885,86 @@ export default class ReadingsController {
         status: 'error',
         message: 'Error al obtener lecturas recientes',
         error: error.message
+      })
+    }
+  }
+
+  /**
+   * Health check para MongoDB
+   * GET /readings/health
+   */
+  public async healthCheck({ response }: HttpContext) {
+    try {
+      console.log('🔍 Starting MongoDB health check...')
+      
+      // Información de conexión
+      const mongoose = (await import('mongoose')).default
+      const connectionState = mongoose.connection.readyState
+      const stateNames = ['disconnected', 'connected', 'connecting', 'disconnecting']
+      
+      console.log(`📊 MongoDB connection state: ${connectionState} (${stateNames[connectionState] || 'unknown'})`)
+      
+      // Probar conexión básica con timeout más largo
+      const startTime = Date.now()
+      
+      const testResult = await Reading.findOne({}).maxTimeMS(15000).lean()
+      
+      const responseTime = Date.now() - startTime
+      
+      console.log(`✅ MongoDB query successful in ${responseTime}ms`)
+      
+      return response.ok({
+        status: 'success',
+        data: {
+          mongodb: 'connected',
+          connectionState: stateNames[connectionState] || 'unknown',
+          responseTime: `${responseTime}ms`,
+          hasData: testResult !== null,
+          timestamp: new Date().toISOString()
+        }
+      })
+    } catch (error) {
+      console.error('❌ MongoDB health check failed:', error)
+      
+      const mongoose = (await import('mongoose')).default
+      const connectionState = mongoose.connection.readyState
+      const stateNames = ['disconnected', 'connected', 'connecting', 'disconnecting']
+      
+      return response.status(503).json({
+        status: 'error',
+        message: 'MongoDB no está disponible',
+        connectionState: stateNames[connectionState] || 'unknown',
+        error: error.message,
+        errorCode: error.code || 'UNKNOWN',
+        timestamp: new Date().toISOString()
+      })
+    }
+  }
+
+  /**
+   * Test endpoint simple - solo para debug
+   * GET /readings/test-mongo
+   */
+  public async testMongo({ response }: HttpContext) {
+    try {
+      console.log('🧪 Testing MongoDB connection without auth...')
+      
+      // Test básico sin timeouts
+      const count = await Reading.countDocuments({})
+      
+      return response.ok({
+        status: 'success',
+        message: 'MongoDB test successful',
+        totalReadings: count,
+        timestamp: new Date().toISOString()
+      })
+    } catch (error) {
+      console.error('🚨 MongoDB test failed:', error)
+      return response.status(500).json({
+        status: 'error',
+        message: 'MongoDB test failed',
+        error: error.message,
+        timestamp: new Date().toISOString()
       })
     }
   }

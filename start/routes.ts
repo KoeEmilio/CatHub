@@ -75,6 +75,8 @@ router.group(() => {
 // Rutas de lecturas (readings)
 router.group(() => {
   router.post('/', [ReadingsController, 'store']) // Sin auth para que Arduino pueda enviar datos
+  router.get('/health', [ReadingsController, 'healthCheck']) // Health check sin auth
+  router.get('/test-mongo', [ReadingsController, 'testMongo']) // Test MongoDB sin auth - TEMPORAL
   router.get('/latest', [ReadingsController, 'getLatestReadings']).use(middleware.auth()) // Últimas 5 lecturas
   router.get('/recent', [ReadingsController, 'getRecentReadings']).use(middleware.auth()) // Últimas N lecturas configurables
   router.get('/dashboard', [ReadingsController, 'getDashboardData']).use(middleware.auth()) // Datos del dashboard
