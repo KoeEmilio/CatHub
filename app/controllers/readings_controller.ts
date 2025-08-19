@@ -1,6 +1,7 @@
 import { HttpContext } from '@adonisjs/core/http'
 import Reading from '../models/readings.js'
 import Device from '../models/device.js'
+import DeviceEnvir from '../models/device_envir.js'
 
 export default class ReadingsController {
   /**
@@ -693,11 +694,11 @@ export default class ReadingsController {
   
       // Obtener device_environments del usuario directamente
       const userDeviceEnvirs = await DeviceEnvir.query()
-        .preload('environment', (envQuery) => {
+        .preload('environment', (envQuery: any) => {
           envQuery.where('id_user', user.id)
         })
         .preload('device') // Cargar información del device para mostrar
-        .whereHas('environment', (envQuery) => {
+        .whereHas('environment', (envQuery: any) => {
           envQuery.where('id_user', user.id)
         })
   
@@ -713,7 +714,7 @@ export default class ReadingsController {
       }
   
       // Obtener los IDs de device_environments del usuario
-      const userDeviceEnvirIds = userDeviceEnvirs.map(deviceEnvir => deviceEnvir.id.toString())
+      const userDeviceEnvirIds = userDeviceEnvirs.map((deviceEnvir: any) => deviceEnvir.id.toString())
   
       // Obtener las últimas 5 lecturas usando deviceEnvirId en lugar de deviceId
       let latestReadings
@@ -738,7 +739,7 @@ export default class ReadingsController {
             
           // Filtrar en JavaScript si MongoDB no responde bien
           latestReadings = latestReadings
-            .filter(reading => userDeviceEnvirIds.includes(reading.deviceEnvirId))
+            .filter((reading: any) => userDeviceEnvirIds.includes(reading.deviceEnvirId))
             .slice(0, 5) // Limitar a 5 después del filtro
         } catch (fallbackError) {
           console.error('Error en consulta de fallback:', fallbackError)
@@ -751,8 +752,8 @@ export default class ReadingsController {
       }
   
       // Enriquecer los datos con información del device_environment
-      const enrichedReadings = latestReadings.map(reading => {
-        const deviceEnvir = userDeviceEnvirs.find(de => de.id.toString() === reading.deviceEnvirId)
+      const enrichedReadings = latestReadings.map((reading: any) => {
+        const deviceEnvir = userDeviceEnvirs.find((de: any) => de.id.toString() === reading.deviceEnvirId)
         return {
           id: reading._id,
           sensorName: reading.sensorName,
