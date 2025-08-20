@@ -10,6 +10,8 @@
 import router from '@adonisjs/core/services/router'
 import { middleware } from './kernel.js'
 
+import SensorsController from '#controllers/sensors_controller'
+
 const UsersController = () => import('../app/controllers/users_controller.js')
 const LoginController = () => import('../app/controllers/Auth/login_controller.js')
 const EnvironmentsController = () => import('../app/controllers/environments_controller.js')
@@ -24,6 +26,8 @@ router.get('/', async () => {
     status: 'running'
   }
 })
+
+router.get('/sensors/:id', [SensorsController, 'getByIdentifier'])
 
 // Rutas de autenticación
 router.group(() => {
