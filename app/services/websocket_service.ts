@@ -51,12 +51,21 @@ class WebSocketService {
       // Manejar acciones del comedero en tiempo real
       socket.on('start_dispense_food', (data) => {
         console.log('🍽️ Iniciando dispensar comida:', data)
-        this.emitDeviceAction('start_dispense_food', data)
+        this.emitFeederCommand('FDR1:1', data) // Comando para activar comedero
       })
 
       socket.on('stop_dispense_food', (data) => {
         console.log('🛑 Deteniendo dispensar comida:', data)
-        this.emitDeviceAction('stop_dispense_food', data)
+        this.emitFeederCommand('FDR1:0', data) // Comando para desactivar comedero
+      })
+
+      // Manejar comandos de control general (arenero, etc.)
+      socket.on('control', (commands) => {
+        console.log('🎛️ Comando de control recibido:', commands)
+        if (Array.isArray(commands) && commands.length > 0) {
+          const command = commands[0] // Tomar el primer comando
+          this.emitControlCommand(command, { timestamp: new Date().toISOString() })
+        }
       })
 
       // Manejar mensaje de prueba
@@ -483,6 +492,48 @@ class WebSocketService {
     this.io.emit('realtime_reading', realtimeData)
 
     console.log(`📊 Nueva lectura emitida en tiempo real: ${readingData.sensorName} = ${readingData.value}`)
+  }
+
+  // Emitir comando del comedero en formato específico para Python
+  emitFeederCommand(command: string, data: any) {
+    if (!this.io) {
+      console.warn('WebSocket no inicializado')
+      return
+    }
+
+    const feederData = {
+      type: 'feeder_command',
+      command: command, // 'FDR1:1' o 'FDR1:0'
+      deviceEnvirId: data.deviceEnvirId,
+      deviceId: data.deviceId,
+      timestamp: new Date().toISOString(),
+      ...data
+    }
+
+    // Emitir comando específico del comedero a todos los clientes (incluido script Python)
+    this.io.emit('feeder_action', feederData)
+
+    console.log(`🍽️ Comando de comedero emitido: ${command}`, feederData)
+  }
+
+  // Emitir comando de control general (arenero, etc.)
+  emitControlCommand(command: string, data: any) {
+    if (!this.io) {
+      console.warn('WebSocket no inicializado')
+      return
+    }
+
+    const controlData = {
+      type: 'control_command',
+      command: command, // 'LTR1:2.2', 'LTR1:2.1', 'LTR1:2', 'LTR1:LT', 'MTR_001:X'
+      timestamp: new Date().toISOString(),
+      ...data
+    }
+
+    // Emitir comando de control a todos los clientes (incluido script Python)
+    this.io.emit('control_action', controlData)
+
+    console.log(`🎛️ Comando de control emitido: ${command}`, controlData)
   }
 }
 

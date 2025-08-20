@@ -91,6 +91,9 @@ router.group(() => {
   
   // 🆕 RUTA PARA OBTENER TODOS LOS DISPOSITIVOS CON SENSORES Y LECTURAS
   router.get('/all-devices-sensors', [ReadingsController, 'getAllDevicesWithSensorsAndReadings']).use(middleware.auth())
+  
+  // 🆕 RUTA PARA ENVIAR COMANDOS DE CONTROL A DISPOSITIVOS IoT
+  router.post('/control-command', [ReadingsController, 'sendControlCommand']).use(middleware.auth())
 }).prefix('/api/readings')
 
 

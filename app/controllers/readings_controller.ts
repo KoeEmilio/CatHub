@@ -1520,4 +1520,48 @@ export default class ReadingsController {
       })
     }
   }
+
+  /**
+   * Enviar comando de control a dispositivos IoT
+   */
+  public async sendControlCommand({ request, response }: HttpContext) {
+    try {
+      const { command, deviceId, deviceEnvirId, type } = request.only(['command', 'deviceId', 'deviceEnvirId', 'type'])
+      
+      // Validar datos requeridos
+      if (!command) {
+        return response.status(400).json({
+          status: 'error',
+          message: 'El campo command es obligatorio'
+        })
+      }
+
+      // Emitir comando por WebSocket
+      WebSocketService.emitControlCommand(command, {
+        deviceId: deviceId,
+        deviceEnvirId: deviceEnvirId,
+        type: type || 'control'
+      })
+
+      return response.json({
+        status: 'success',
+        message: 'Comando enviado correctamente',
+        data: {
+          command: command,
+          deviceId: deviceId,
+          deviceEnvirId: deviceEnvirId,
+          type: type,
+          timestamp: new Date().toISOString()
+        }
+      })
+
+    } catch (error) {
+      console.error('Error enviando comando de control:', error)
+      return response.status(500).json({
+        status: 'error',
+        message: 'Error interno del servidor',
+        error: error.message
+      })
+    }
+  }
 }
