@@ -461,6 +461,29 @@ class WebSocketService {
 
     console.log(`🎬 Acción de dispositivo emitida: ${action}`, actionData)
   }
+
+  // Emitir nueva lectura de sensor en tiempo real
+  emitNewReading(readingData: any) {
+    if (!this.io) {
+      console.warn('WebSocket no inicializado')
+      return
+    }
+
+    const realtimeData = {
+      type: 'new_reading',
+      sensorName: readingData.sensorName,
+      identifier: readingData.identifier,
+      value: readingData.value,
+      deviceId: readingData.deviceId,
+      deviceEnvirId: readingData.deviceEnvirId,
+      timestamp: readingData.timestamp || new Date().toISOString()
+    }
+
+    // Emitir nueva lectura a todos los clientes conectados
+    this.io.emit('realtime_reading', realtimeData)
+
+    console.log(`📊 Nueva lectura emitida en tiempo real: ${readingData.sensorName} = ${readingData.value}`)
+  }
 }
 
 export default WebSocketService.getInstance()

@@ -2,6 +2,7 @@ import { HttpContext } from '@adonisjs/core/http'
 import Reading from '../models/readings.js'
 import Device from '../models/device.js'
 import DeviceEnvir from '../models/device_envir.js'
+import WebSocketService from '../services/websocket_service.js'
 
 export default class ReadingsController {
   /**
@@ -76,6 +77,16 @@ export default class ReadingsController {
       })
   
       await reading.save()
+      
+      // 🚀 Emitir nueva lectura en tiempo real por WebSocket
+      WebSocketService.emitNewReading({
+        sensorName: reading.sensorName,
+        identifier: reading.identifier,
+        value: reading.value,
+        deviceId: reading.deviceId,
+        deviceEnvirId: reading.deviceEnvirId,
+        timestamp: reading.timestamp
+      })
       
       return response.status(201).json({
         status: 'success',
@@ -1399,16 +1410,10 @@ export default class ReadingsController {
   }
 
   /**
-   * Obtener todos los dispositivos con sus sensores y lecturas
+   * Obtener todos los dispositivos con sus sensores y últimas lecturas (tiempo real)
    */
-  public async getAllDevicesWithSensorsAndReadings({ request, response }: HttpContext) {
+  public async getAllDevicesWithSensorsAndReadings({ response }: HttpContext) {
     try {
-      const { hours = 24, limit = 10 } = request.qs()
-      
-      // Calcular timestamp desde hace X horas
-      const hoursAgo = new Date()
-      hoursAgo.setHours(hoursAgo.getHours() - parseInt(hours))
-
       // Obtener todos los dispositivos con sus device_environments
       const devices = await Device.query()
         .preload('deviceEnvirs', (query) => {
@@ -1431,17 +1436,16 @@ export default class ReadingsController {
               deviceEnvirs: device.deviceEnvirs
             },
             sensors: [],
-            totalReadings: 0
+            lastUpdate: null
           })
           continue
         }
 
-        // Agregación para obtener sensores únicos con sus últimas lecturas
-        const sensorsWithReadings = await Reading.aggregate([
+        // Agregación optimizada para obtener solo las últimas lecturas por sensor
+        const latestReadingsBySensor = await Reading.aggregate([
           {
             $match: {
-              deviceEnvirId: { $in: deviceEnvirIds },
-              timestamp: { $gte: hoursAgo }
+              deviceEnvirId: { $in: deviceEnvirIds }
             }
           },
           {
@@ -1454,23 +1458,7 @@ export default class ReadingsController {
                 identifier: '$identifier',
                 deviceEnvirId: '$deviceEnvirId'
               },
-              latestReading: { $first: '$$ROOT' },
-              readingsCount: { $sum: 1 },
-              avgValue: { $avg: '$value' },
-              minValue: { $min: '$value' },
-              maxValue: { $max: '$value' },
-              readings: { $push: '$$ROOT' }
-            }
-          },
-          {
-            $project: {
-              _id: 1,
-              latestReading: 1,
-              readingsCount: 1,
-              avgValue: { $round: ['$avgValue', 2] },
-              minValue: 1,
-              maxValue: 1,
-              recentReadings: { $slice: ['$readings', parseInt(limit)] }
+              latestReading: { $first: '$$ROOT' }
             }
           },
           {
@@ -1480,26 +1468,24 @@ export default class ReadingsController {
                 $push: {
                   deviceEnvirId: '$_id.deviceEnvirId',
                   identifier: '$_id.identifier',
-                  latestReading: '$latestReading',
-                  readingsCount: '$readingsCount',
-                  stats: {
-                    avg: '$avgValue',
-                    min: '$minValue',
-                    max: '$maxValue'
-                  },
-                  recentReadings: '$recentReadings'
+                  sensorName: '$_id.sensorName',
+                  value: '$latestReading.value',
+                  timestamp: '$latestReading.timestamp',
+                  deviceId: '$latestReading.deviceId',
+                  reading: '$latestReading'
                 }
-              },
-              totalReadings: { $sum: '$readingsCount' }
+              }
             }
+          },
+          {
+            $sort: { '_id': 1 }
           }
         ])
 
-        // Contar total de lecturas para este dispositivo
-        const totalReadings = await Reading.countDocuments({
-          deviceEnvirId: { $in: deviceEnvirIds },
-          timestamp: { $gte: hoursAgo }
-        })
+        // Obtener el timestamp de la lectura más reciente para este dispositivo
+        const mostRecentReading = await Reading.findOne({
+          deviceEnvirId: { $in: deviceEnvirIds }
+        }).sort({ timestamp: -1 })
 
         devicesWithSensors.push({
           device: {
@@ -1507,8 +1493,8 @@ export default class ReadingsController {
             name: device.name,
             deviceEnvirs: device.deviceEnvirs
           },
-          sensors: sensorsWithReadings,
-          totalReadings: totalReadings
+          sensors: latestReadingsBySensor,
+          lastUpdate: mostRecentReading?.timestamp || null
         })
       }
 
@@ -1518,14 +1504,8 @@ export default class ReadingsController {
           devices: devicesWithSensors,
           metadata: {
             totalDevices: devices.length,
-            queryParams: {
-              hours: parseInt(hours),
-              limit: parseInt(limit)
-            },
-            timeRange: {
-              from: hoursAgo.toISOString(),
-              to: new Date().toISOString()
-            }
+            dataType: 'latest_readings',
+            realtime: true
           }
         },
         timestamp: new Date().toISOString()
