@@ -40,12 +40,60 @@ class WebSocketService {
       socket.on('subscribe_device', (deviceId) => {
         console.log(`📡 Cliente se suscribe al dispositivo: ${deviceId}`)
         socket.join(`device_${deviceId}`)
+        socket.emit('subscription_confirmed', { 
+          deviceId, 
+          room: `device_${deviceId}`,
+          message: `Suscrito al dispositivo ${deviceId}` 
+        })
       })
 
       // Manejar desuscripción de dispositivo
       socket.on('unsubscribe_device', (deviceId) => {
         console.log(`📡 Cliente se desuscribe del dispositivo: ${deviceId}`)
         socket.leave(`device_${deviceId}`)
+        socket.emit('unsubscription_confirmed', { 
+          deviceId, 
+          room: `device_${deviceId}`,
+          message: `Desuscrito del dispositivo ${deviceId}` 
+        })
+      })
+
+      // Manejar suscripción a entorno específico
+      socket.on('subscribe_environment', (environmentId) => {
+        console.log(`🏠 Cliente se suscribe al entorno: ${environmentId}`)
+        socket.join(`environment_${environmentId}`)
+        socket.emit('subscription_confirmed', { 
+          environmentId, 
+          room: `environment_${environmentId}`,
+          message: `Suscrito al entorno ${environmentId}` 
+        })
+      })
+
+      // Manejar suscripción a tipo de dispositivo específico
+      socket.on('subscribe_device_type', (deviceType) => {
+        console.log(`🎯 Cliente se suscribe a tipo: ${deviceType}`)
+        socket.join(`type_${deviceType}`)
+        socket.emit('subscription_confirmed', { 
+          deviceType, 
+          room: `type_${deviceType}`,
+          message: `Suscrito a dispositivos tipo ${deviceType}` 
+        })
+      })
+
+      // Manejar suscripción general (todos los eventos)
+      socket.on('subscribe_all', () => {
+        console.log(`🌐 Cliente se suscribe a todos los eventos`)
+        socket.join('all_events')
+        socket.emit('subscription_confirmed', { 
+          room: 'all_events',
+          message: 'Suscrito a todos los eventos del sistema' 
+        })
+      })
+
+      // Manejar solicitud de información de salas
+      socket.on('get_rooms_info', () => {
+        console.log(`📊 Cliente solicita información de salas`)
+        this.emitRoomsInfo(socket.id)
       })
 
       // Manejar acciones del comedero en tiempo real
@@ -391,6 +439,41 @@ class WebSocketService {
     return this.io ? this.io.engine.clientsCount : 0
   }
 
+  // Obtener información de las salas activas
+  getRoomsInfo(): any {
+    if (!this.io) {
+      return { error: 'WebSocket no inicializado' }
+    }
+
+    const adapter = this.io.sockets.adapter
+    const rooms = adapter.rooms
+    const roomsInfo: any = {}
+
+    rooms.forEach((sockets, roomName) => {
+      // Filtrar salas que no sean IDs de socket individuales
+      if (!sockets.has(roomName)) {
+        roomsInfo[roomName] = {
+          clientCount: sockets.size,
+          clients: Array.from(sockets)
+        }
+      }
+    })
+
+    return {
+      totalRooms: Object.keys(roomsInfo).length,
+      totalClients: this.getConnectedClients(),
+      rooms: roomsInfo
+    }
+  }
+
+  // Emitir información de salas a un cliente específico
+  emitRoomsInfo(socketId: string) {
+    if (!this.io) return
+
+    const roomsInfo = this.getRoomsInfo()
+    this.io.to(socketId).emit('rooms_info', roomsInfo)
+  }
+
   // Emitir cambios generales en la base de datos
   emitDatabaseChange(changeData: any) {
     if (!this.io) {
@@ -488,10 +571,16 @@ class WebSocketService {
       timestamp: readingData.timestamp || new Date().toISOString()
     }
 
-    // Emitir nueva lectura a todos los clientes conectados
+    // Emitir a la sala específica del dispositivo
+    this.io.to(`device_${readingData.deviceId}`).emit('realtime_reading', realtimeData)
+
+    // Emitir a la sala de todos los eventos
+    this.io.to('all_events').emit('realtime_reading', realtimeData)
+
+    // Mantener compatibilidad: emitir a todos los clientes
     this.io.emit('realtime_reading', realtimeData)
 
-    console.log(`📊 Nueva lectura emitida en tiempo real: ${readingData.sensorName} = ${readingData.value}`)
+    console.log(`📊 Nueva lectura emitida a sala device_${readingData.deviceId}: ${readingData.sensorName} = ${readingData.value}`)
   }
 
   // Emitir comando del comedero en formato específico para Python
@@ -510,10 +599,21 @@ class WebSocketService {
       ...data
     }
 
-    // Emitir comando específico del comedero a todos los clientes (incluido script Python)
+    // Emitir a la sala específica del dispositivo
+    if (data.deviceId) {
+      this.io.to(`device_${data.deviceId}`).emit('feeder_action', feederData)
+    }
+
+    // Emitir a la sala de tipo comedero
+    this.io.to('type_comedero').emit('feeder_action', feederData)
+
+    // Emitir a la sala de todos los eventos
+    this.io.to('all_events').emit('feeder_action', feederData)
+
+    // Mantener compatibilidad: emitir a todos los clientes para el script Python
     this.io.emit('feeder_action', feederData)
 
-    console.log(`🍽️ Comando de comedero emitido: ${command}`, feederData)
+    console.log(`🍽️ Comando de comedero emitido a salas específicas: ${command}`)
   }
 
   // Emitir comando de control general (arenero, etc.)
@@ -530,10 +630,27 @@ class WebSocketService {
       ...data
     }
 
-    // Emitir comando de control a todos los clientes (incluido script Python)
+    // Determinar tipo de dispositivo según el comando
+    let deviceType = 'general'
+    if (command.startsWith('LTR1:') || command.startsWith('MTR_001:')) {
+      deviceType = 'arenero'
+    }
+
+    // Emitir a la sala específica del dispositivo si tenemos deviceId
+    if (data.deviceId) {
+      this.io.to(`device_${data.deviceId}`).emit('control_action', controlData)
+    }
+
+    // Emitir a la sala de tipo de dispositivo
+    this.io.to(`type_${deviceType}`).emit('control_action', controlData)
+
+    // Emitir a la sala de todos los eventos
+    this.io.to('all_events').emit('control_action', controlData)
+
+    // Mantener compatibilidad: emitir a todos los clientes para el script Python
     this.io.emit('control_action', controlData)
 
-    console.log(`🎛️ Comando de control emitido: ${command}`, controlData)
+    console.log(`🎛️ Comando de control emitido a salas específicas: ${command}`)
   }
 }
 
