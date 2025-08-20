@@ -5,7 +5,7 @@ export default class SensorsController {
 
   async getByIdentifier({params, response}: HttpContext) {
     const { id } = params
-    const sensor = await Reading.findOne({identifier: id})
+    const sensor = await Reading.findOne({identifier: id}).sort({_id: -1})
 
     if (!sensor) {
       return response.notFound({ message: 'Sensor not found' })
