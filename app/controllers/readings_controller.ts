@@ -1166,11 +1166,16 @@ export default class ReadingsController {
       const deviceInfo = await Device.query()
         .where('id', deviceId)
         .preload('deviceEnvirs', (query) => {
-          query.preload('environment')
-            .select(['id', 'alias', 'type', 'status'])
+          query.whereNotNull('idEnvironment')
+          query.preload('environment', (envQuery) => {
+            envQuery.select(['id', 'alias', 'type', 'status'])
+          })
         })
         .select(['id', 'name'])
         .first()
+
+      // Filtrar solo los deviceEnvirs que tengan environment cargado
+      const filteredDeviceEnvirs = (deviceInfo?.deviceEnvirs || []).filter(de => de.environment)
 
       // Obtener sensores únicos para este dispositivo
       const uniqueSensors = await Reading.distinct('sensorName', {
@@ -1198,7 +1203,7 @@ export default class ReadingsController {
           deviceInfo: {
             id: deviceInfo?.id,
             name: deviceInfo?.name,
-            deviceEnvirs: deviceInfo?.deviceEnvirs || []
+            deviceEnvirs: filteredDeviceEnvirs
           },
           sensorData: sensorData,
           metadata: {
