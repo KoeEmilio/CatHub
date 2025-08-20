@@ -1047,15 +1047,33 @@ export default class ReadingsController {
         })
       }
 
+
+
+
       // Calcular timestamp desde hace X horas
       const hoursAgo = new Date()
       hoursAgo.setHours(hoursAgo.getHours() - parseInt(hours))
+
+      // Obtener información adicional del dispositivo y sus device_environments
+      const deviceInfo = await Device.query()
+        .where('id', deviceId)
+        .preload('deviceEnvirs', (query) => {
+          query.whereNotNull('idEnvironment')
+          query.preload('environment')
+        })
+        .select(['id', 'name'])
+        .first()
+
+      // Filtrar solo los deviceEnvirs que tengan environment cargado (opcional, pero recomendable)
+      const filteredDeviceEnvirs = (deviceInfo?.deviceEnvirs || []).filter(de => de.environment)
+      // Obtener todos los deviceEnvirId asociados al deviceId
+      const deviceEnvirIds = filteredDeviceEnvirs.map(de => de.id.toString())
 
       // Pipeline de agregación para obtener datos agrupados por sensor
       const pipeline: any[] = [
         {
           $match: {
-            deviceId: deviceId.toString(),
+            deviceEnvirId: { $in: deviceEnvirIds },
             timestamp: { $gte: hoursAgo }
           }
         },
@@ -1159,40 +1177,27 @@ export default class ReadingsController {
         })
       }
 
+
       // Ejecutar la agregación
       const sensorData = await Reading.aggregate(pipeline)
 
-
-      // Obtener información adicional del dispositivo y sus device_environments
-      const deviceInfo = await Device.query()
-        .where('id', deviceId)
-        .preload('deviceEnvirs', (query) => {
-          query.whereNotNull('idEnvironment')
-          query.preload('environment') // sin select, para evitar error
-        })
-        .select(['id', 'name'])
-        .first()
-
-      // Filtrar solo los deviceEnvirs que tengan environment cargado (opcional, pero recomendable)
-      const filteredDeviceEnvirs = (deviceInfo?.deviceEnvirs || []).filter(de => de.environment)
-
-      // Obtener sensores únicos para este dispositivo
+      // Obtener sensores únicos para este dispositivo (por deviceEnvirId)
       const uniqueSensors = await Reading.distinct('sensorName', {
-        deviceId: deviceId.toString()
+        deviceEnvirId: { $in: deviceEnvirIds }
       })
 
       // Estadísticas generales
       const totalReadings = await Reading.countDocuments({
-        deviceId: deviceId.toString(),
+        deviceEnvirId: { $in: deviceEnvirIds },
         timestamp: { $gte: hoursAgo }
       })
 
       const oldestReading = await Reading.findOne({
-        deviceId: deviceId.toString()
+        deviceEnvirId: { $in: deviceEnvirIds }
       }).sort({ timestamp: 1 })
 
       const newestReading = await Reading.findOne({
-        deviceId: deviceId.toString()
+        deviceEnvirId: { $in: deviceEnvirIds }
       }).sort({ timestamp: -1 })
 
       return response.ok({
@@ -1390,6 +1395,149 @@ export default class ReadingsController {
         status: 500,
         message: 'Error verificando acceso al dispositivo'
       }
+    }
+  }
+
+  /**
+   * Obtener todos los dispositivos con sus sensores y lecturas
+   */
+  public async getAllDevicesWithSensorsAndReadings({ request, response }: HttpContext) {
+    try {
+      const { hours = 24, limit = 10 } = request.qs()
+      
+      // Calcular timestamp desde hace X horas
+      const hoursAgo = new Date()
+      hoursAgo.setHours(hoursAgo.getHours() - parseInt(hours))
+
+      // Obtener todos los dispositivos con sus device_environments
+      const devices = await Device.query()
+        .preload('deviceEnvirs', (query) => {
+          query.whereNotNull('idEnvironment')
+          query.preload('environment')
+        })
+        .select(['id', 'name'])
+
+      const devicesWithSensors = []
+
+      for (const device of devices) {
+        // Obtener todos los deviceEnvirIds para este dispositivo
+        const deviceEnvirIds = device.deviceEnvirs.map(de => de.id.toString())
+        
+        if (deviceEnvirIds.length === 0) {
+          devicesWithSensors.push({
+            device: {
+              id: device.id,
+              name: device.name,
+              deviceEnvirs: device.deviceEnvirs
+            },
+            sensors: [],
+            totalReadings: 0
+          })
+          continue
+        }
+
+        // Agregación para obtener sensores únicos con sus últimas lecturas
+        const sensorsWithReadings = await Reading.aggregate([
+          {
+            $match: {
+              deviceEnvirId: { $in: deviceEnvirIds },
+              timestamp: { $gte: hoursAgo }
+            }
+          },
+          {
+            $sort: { timestamp: -1 }
+          },
+          {
+            $group: {
+              _id: {
+                sensorName: '$sensorName',
+                identifier: '$identifier',
+                deviceEnvirId: '$deviceEnvirId'
+              },
+              latestReading: { $first: '$$ROOT' },
+              readingsCount: { $sum: 1 },
+              avgValue: { $avg: '$value' },
+              minValue: { $min: '$value' },
+              maxValue: { $max: '$value' },
+              readings: { $push: '$$ROOT' }
+            }
+          },
+          {
+            $project: {
+              _id: 1,
+              latestReading: 1,
+              readingsCount: 1,
+              avgValue: { $round: ['$avgValue', 2] },
+              minValue: 1,
+              maxValue: 1,
+              recentReadings: { $slice: ['$readings', parseInt(limit)] }
+            }
+          },
+          {
+            $group: {
+              _id: '$_id.sensorName',
+              sensors: {
+                $push: {
+                  deviceEnvirId: '$_id.deviceEnvirId',
+                  identifier: '$_id.identifier',
+                  latestReading: '$latestReading',
+                  readingsCount: '$readingsCount',
+                  stats: {
+                    avg: '$avgValue',
+                    min: '$minValue',
+                    max: '$maxValue'
+                  },
+                  recentReadings: '$recentReadings'
+                }
+              },
+              totalReadings: { $sum: '$readingsCount' }
+            }
+          }
+        ])
+
+        // Contar total de lecturas para este dispositivo
+        const totalReadings = await Reading.countDocuments({
+          deviceEnvirId: { $in: deviceEnvirIds },
+          timestamp: { $gte: hoursAgo }
+        })
+
+        devicesWithSensors.push({
+          device: {
+            id: device.id,
+            name: device.name,
+            deviceEnvirs: device.deviceEnvirs
+          },
+          sensors: sensorsWithReadings,
+          totalReadings: totalReadings
+        })
+      }
+
+      return response.json({
+        status: 'success',
+        data: {
+          devices: devicesWithSensors,
+          metadata: {
+            totalDevices: devices.length,
+            queryParams: {
+              hours: parseInt(hours),
+              limit: parseInt(limit)
+            },
+            timeRange: {
+              from: hoursAgo.toISOString(),
+              to: new Date().toISOString()
+            }
+          }
+        },
+        timestamp: new Date().toISOString()
+      })
+
+    } catch (error) {
+      console.error('Error obteniendo dispositivos con sensores:', error)
+      return response.status(500).json({
+        status: 'error',
+        message: 'Error interno del servidor',
+        error: error.message
+      })
     }
   }
 }

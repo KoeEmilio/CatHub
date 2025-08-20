@@ -88,6 +88,9 @@ router.group(() => {
   // 🆕 NUEVAS RUTAS OPTIMIZADAS PARA FRONTEND EN TIEMPO REAL
   router.get('/device/:deviceId/sensors', [ReadingsController, 'getSensorDataByDevice']).use(middleware.auth()) // Datos completos de sensores
   router.get('/device/:deviceId/sensors/summary', [ReadingsController, 'getDeviceSensorSummary']).use(middleware.auth()) // Resumen rápido
+  
+  // 🆕 RUTA PARA OBTENER TODOS LOS DISPOSITIVOS CON SENSORES Y LECTURAS
+  router.get('/all-devices-sensors', [ReadingsController, 'getAllDevicesWithSensorsAndReadings']).use(middleware.auth())
 }).prefix('/api/readings')
 
 

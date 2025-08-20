@@ -48,6 +48,17 @@ class WebSocketService {
         socket.leave(`device_${deviceId}`)
       })
 
+      // Manejar acciones del comedero en tiempo real
+      socket.on('start_dispense_food', (data) => {
+        console.log('🍽️ Iniciando dispensar comida:', data)
+        this.emitDeviceAction('start_dispense_food', data)
+      })
+
+      socket.on('stop_dispense_food', (data) => {
+        console.log('🛑 Deteniendo dispensar comida:', data)
+        this.emitDeviceAction('stop_dispense_food', data)
+      })
+
       // Manejar mensaje de prueba
       socket.on('test_message', (data) => {
         console.log('🧪 Mensaje de prueba recibido:', data)
@@ -427,6 +438,28 @@ class WebSocketService {
       timestamp: new Date().toISOString(),
       ...deviceData
     })
+  }
+
+  // Emitir acción de dispositivo a script Python
+  emitDeviceAction(action: string, data: any) {
+    if (!this.io) {
+      console.warn('WebSocket no inicializado')
+      return
+    }
+
+    const actionData = {
+      action: action,
+      deviceEnvirId: data.deviceEnvirId,
+      deviceId: data.deviceId,
+      type: data.type, // 'comedero', 'bebedero', etc.
+      timestamp: new Date().toISOString(),
+      ...data
+    }
+
+    // Emitir acción a todos los clientes (incluido script Python)
+    this.io.emit('device_action', actionData)
+
+    console.log(`🎬 Acción de dispositivo emitida: ${action}`, actionData)
   }
 }
 
