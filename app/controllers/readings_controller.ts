@@ -1162,19 +1162,18 @@ export default class ReadingsController {
       // Ejecutar la agregación
       const sensorData = await Reading.aggregate(pipeline)
 
-      // Obtener información adicional del dispositivo
+
+      // Obtener información adicional del dispositivo y sus device_environments
       const deviceInfo = await Device.query()
         .where('id', deviceId)
         .preload('deviceEnvirs', (query) => {
           query.whereNotNull('idEnvironment')
-          query.preload('environment', (envQuery) => {
-            envQuery.select(['id', 'alias', 'type', 'status'])
-          })
+          query.preload('environment') // sin select, para evitar error
         })
         .select(['id', 'name'])
         .first()
 
-      // Filtrar solo los deviceEnvirs que tengan environment cargado
+      // Filtrar solo los deviceEnvirs que tengan environment cargado (opcional, pero recomendable)
       const filteredDeviceEnvirs = (deviceInfo?.deviceEnvirs || []).filter(de => de.environment)
 
       // Obtener sensores únicos para este dispositivo
