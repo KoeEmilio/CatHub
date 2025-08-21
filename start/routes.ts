@@ -27,7 +27,7 @@ router.get('/', async () => {
   }
 })
 
-router.get('/sensors/:id', [SensorsController, 'getByIdentifier'])
+router.get('/api/sensors/:id', [SensorsController, 'getByIdentifier'])
 
 // Rutas de autenticación
 router.group(() => {
