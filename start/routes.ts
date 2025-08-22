@@ -28,6 +28,7 @@ router.get('/', async () => {
 })
 
 router.get('/api/sensors/:id', [SensorsController, 'getByIdentifier'])
+router.get('/api/sensors/:id/last-status', [SensorsController, 'getLastStatusForDevice'])
 
 // Rutas de autenticación
 router.group(() => {
